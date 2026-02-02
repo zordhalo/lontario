@@ -1,5 +1,5 @@
 /**
- * @fileoverview Type definitions for the AI Hiring Platform
+ * @fileoverview Type definitions for Lontario - AI Hiring Platform
  * 
  * This module contains all TypeScript types, interfaces, and Zod schemas used throughout
  * the application. Types are organized into the following categories:

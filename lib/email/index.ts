@@ -50,7 +50,7 @@ function getResendClient(): Resend {
 }
 
 /** Default sender address - should be verified domain in Resend dashboard */
-const DEFAULT_FROM = process.env.EMAIL_FROM || "AI Hiring Platform <noreply@example.com>";
+const DEFAULT_FROM = process.env.EMAIL_FROM || "Lontario <noreply@example.com>";
 
 // ============================================================
 // TYPE DEFINITIONS

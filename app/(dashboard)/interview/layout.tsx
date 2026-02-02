@@ -1,7 +1,7 @@
 import { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "AI Interview Generator | AI Hiring Platform",
+  title: "AI Interview Generator | Lontario",
   description:
     "Generate personalized interview questions with AI-powered scoring rubrics based on job descriptions and candidate profiles",
 }

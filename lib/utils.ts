@@ -1,5 +1,5 @@
 /**
- * @fileoverview Utility functions for the AI Hiring Platform
+ * @fileoverview Utility functions for Lontario - AI Hiring Platform
  * 
  * Contains helper functions for:
  * - CSS class merging (Tailwind CSS)
@@ -134,12 +134,12 @@ export function getAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
   }
-  
+
   // Vercel automatically provides this in all deployments
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-  
+
   // Fallback for local development
   return 'http://localhost:3000';
 }
