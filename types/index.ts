@@ -57,7 +57,7 @@ export type CandidateStage =
 /**
  * Job posting lifecycle status
  */
-export type JobStatus = 
+export type JobStatus =
   | "draft"   // Not published, still being edited
   | "active"  // Published and accepting applications
   | "paused"  // Temporarily not accepting applications
@@ -125,11 +125,17 @@ export type QuestionDifficulty = "easy" | "medium" | "hard";
 // ============================================================
 
 /**
+ * User role for RBAC
+ */
+export type UserRole = "candidate" | "recruiter" | "hiring_manager" | "admin";
+
+/**
  * User profile stored in Supabase
  * Linked to Supabase Auth user via id field
  * 
  * @property id - UUID matching Supabase Auth user ID
  * @property role - Access level determining permissions
+ * @property organization_id - Company/organization the user belongs to (for recruiters, hiring managers)
  * @property notification_preferences - JSON blob of email/push settings
  */
 export interface Profile {
@@ -137,13 +143,15 @@ export interface Profile {
   email: string;
   full_name: string | null;
   company_name: string | null;
-  role: "recruiter" | "admin" | "member";
+  role: UserRole;
+  organization_id: string | null;
   avatar_url: string | null;
   timezone: string;
   notification_preferences: Json;
   created_at: string;
   updated_at: string;
 }
+
 
 /**
  * Job posting entity
@@ -1211,12 +1219,12 @@ export const PIPELINE_STAGES: {
   color: string;
   description: string;
 }[] = [
-  { id: "applied", label: "Applied", color: "bg-gray-500", description: "New applications" },
-  { id: "screening", label: "Screening", color: "bg-blue-500", description: "AI screening in progress" },
-  { id: "ai_interview", label: "AI Interview", color: "bg-purple-500", description: "Text-based AI interview" },
-  { id: "phone_screen", label: "Phone Screen", color: "bg-indigo-500", description: "Human phone screen" },
-  { id: "technical", label: "Technical", color: "bg-cyan-500", description: "Technical interview" },
-  { id: "onsite", label: "Onsite", color: "bg-teal-500", description: "Onsite/final round" },
-  { id: "offer", label: "Offer", color: "bg-amber-500", description: "Offer extended" },
-  { id: "hired", label: "Hired", color: "bg-green-500", description: "Accepted offer" },
-];
+    { id: "applied", label: "Applied", color: "bg-gray-500", description: "New applications" },
+    { id: "screening", label: "Screening", color: "bg-blue-500", description: "AI screening in progress" },
+    { id: "ai_interview", label: "AI Interview", color: "bg-purple-500", description: "Text-based AI interview" },
+    { id: "phone_screen", label: "Phone Screen", color: "bg-indigo-500", description: "Human phone screen" },
+    { id: "technical", label: "Technical", color: "bg-cyan-500", description: "Technical interview" },
+    { id: "onsite", label: "Onsite", color: "bg-teal-500", description: "Onsite/final round" },
+    { id: "offer", label: "Offer", color: "bg-amber-500", description: "Offer extended" },
+    { id: "hired", label: "Hired", color: "bg-green-500", description: "Accepted offer" },
+  ];
