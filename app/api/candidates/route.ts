@@ -50,7 +50,8 @@ const createCandidateSchema = z.object({
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    // Use admin client to bypass RLS for MVP
+    const supabase = createAdminClient();
 
     // MVP: Auth disabled
 
@@ -189,7 +190,9 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    // Use admin client to bypass RLS for candidate creation
+    // API validates job exists and checks for duplicates
+    const supabase = createAdminClient();
 
     // Parse and validate request body
     const body = await req.json();

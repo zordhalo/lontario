@@ -30,6 +30,10 @@
 -- - Users can view and update their own profile
 -- - Recruiters+ can view profiles in their organization
 -- - Admins can manage all profiles in their org
+--
+-- IMPORTANT: These policies use SECURITY DEFINER helper functions 
+-- to avoid infinite recursion when checking the current user's role.
+-- Never directly query the profiles table within a profiles RLS policy!
 
 -- Drop existing policies to avoid conflicts
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
@@ -40,56 +44,44 @@ DROP POLICY IF EXISTS "Org members can view org profiles" ON profiles;
 DROP POLICY IF EXISTS "Service role can insert profiles" ON profiles;
 DROP POLICY IF EXISTS "Admins can delete profiles" ON profiles;
 
--- SELECT: Users can view their own profile
+-- SELECT: Users can view their own profile (no recursion - direct ID check)
 CREATE POLICY "Users can view own profile"
   ON profiles FOR SELECT
   TO authenticated
   USING (auth.uid() = id);
 
--- SELECT: Admins can view all profiles in their org
+-- SELECT: Admins can view all profiles
+-- Uses SECURITY DEFINER function to avoid recursion
 CREATE POLICY "Admins can view all profiles"
   ON profiles FOR SELECT
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles AS admin_profile
-      WHERE admin_profile.id = auth.uid()
-      AND admin_profile.role = 'admin'
-    )
-  );
+  USING (public.is_admin());
 
 -- SELECT: Recruiters and hiring managers can view profiles in their organization
+-- Uses SECURITY DEFINER functions to safely check role and organization
 CREATE POLICY "Org members can view org profiles"
   ON profiles FOR SELECT
   TO authenticated
   USING (
-    EXISTS (
-      SELECT 1 FROM profiles AS viewer
-      WHERE viewer.id = auth.uid()
-      AND viewer.role IN ('recruiter', 'hiring_manager')
-      AND viewer.organization_id IS NOT NULL
-      AND viewer.organization_id = profiles.organization_id
-    )
+    public.is_recruiter_or_above()
+    AND public.get_user_organization_id() IS NOT NULL
+    AND public.get_user_organization_id() = organization_id
   );
 
--- UPDATE: Users can update their own profile
+-- UPDATE: Users can update their own profile (no recursion - direct ID check)
 CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE
   TO authenticated
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
--- UPDATE: Admins can update any profile in their org
+-- UPDATE: Admins can update any profile
+-- Uses SECURITY DEFINER function to avoid recursion
 CREATE POLICY "Admins can update profiles"
   ON profiles FOR UPDATE
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles AS admin_profile
-      WHERE admin_profile.id = auth.uid()
-      AND admin_profile.role = 'admin'
-    )
-  );
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
 -- INSERT: Allow profile creation (handled by trigger, service role)
 CREATE POLICY "Service role can insert profiles"
@@ -97,16 +89,11 @@ CREATE POLICY "Service role can insert profiles"
   WITH CHECK (true);
 
 -- DELETE: Only admins can delete profiles
+-- Uses SECURITY DEFINER function to avoid recursion
 CREATE POLICY "Admins can delete profiles"
   ON profiles FOR DELETE
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles AS admin_profile
-      WHERE admin_profile.id = auth.uid()
-      AND admin_profile.role = 'admin'
-    )
-  );
+  USING (public.is_admin());
 
 
 -- ============================================================
@@ -208,15 +195,12 @@ CREATE POLICY "Recruiters can view org candidates"
     AND public.user_owns_job(job_id)
   );
 
--- INSERT: Anyone authenticated can apply (create candidate record)
--- This allows public job applications
+-- INSERT: Anyone can apply for jobs (public job applications)
+-- Allows both authenticated users and anonymous visitors to apply
 CREATE POLICY "Anyone can apply to jobs"
   ON candidates FOR INSERT
-  TO authenticated
+  TO anon, authenticated
   WITH CHECK (true);
-
--- INSERT: Allow anonymous applications through service role
--- Public job applications go through API which uses service role
 
 -- UPDATE: Recruiters+ can update candidates in their organization
 CREATE POLICY "Recruiters can update org candidates"
