@@ -88,7 +88,10 @@ export function useUpdateProfile() {
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) {
-        throw new Error(uploadError.message);
+        const msg = uploadError.message.includes("not found")
+          ? "Storage bucket 'avatars' not found. Run the migration: supabase/migrations/20260204_create_avatars_bucket.sql"
+          : uploadError.message;
+        throw new Error(msg);
       }
 
       const { data: urlData } = supabase.storage

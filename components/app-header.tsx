@@ -9,8 +9,13 @@ import {
   LayoutDashboard,
 } from "lucide-react"
 
+import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
-import { ProfileDropdown } from "@/components/profile-dropdown"
+
+const ProfileDropdown = dynamic(
+  () => import("@/components/profile-dropdown").then((mod) => mod.ProfileDropdown),
+  { ssr: false }
+)
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },

@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(claude mcp add:*)",
       "Bash(ls:*)",
       "Bash(npx tsc:*)"
     ]
