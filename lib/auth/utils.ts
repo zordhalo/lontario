@@ -169,6 +169,10 @@ export async function requireRecruiterOrAdmin(
  * Simple rate limiting for API endpoints
  * Uses in-memory storage (not suitable for multi-instance deployments)
  *
+ * @deprecated Use `getRateLimiter()` from `@/lib/rate-limit` instead.
+ * This function is kept for backward compatibility and will be removed
+ * in a future release.
+ *
  * @param identifier - Unique identifier for the rate limit (e.g., IP, user ID)
  * @param limit - Maximum number of requests allowed
  * @param windowMs - Time window in milliseconds
@@ -220,6 +224,10 @@ export function checkRateLimit(
 
 /**
  * Rate limit middleware that returns a response if exceeded
+ *
+ * @deprecated Use middleware-level rate limiting via `@/lib/rate-limit` instead.
+ * This function is kept for backward compatibility and will be removed
+ * in a future release.
  */
 export function rateLimitMiddleware(
     request: NextRequest,
@@ -259,6 +267,8 @@ export function rateLimitMiddleware(
 
 /**
  * Cleanup old rate limit entries
+ *
+ * @deprecated Part of the old rate-limiting system.
  */
 function cleanupRateLimitMap() {
     const now = Date.now();

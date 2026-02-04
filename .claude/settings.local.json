@@ -3,7 +3,11 @@
     "allow": [
       "Bash(claude mcp add:*)",
       "Bash(ls:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm add:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(del \"D:\\\\zDev\\\\lontario-YC\\\\middleware.ts\")"
     ]
   },
   "enableAllProjectMcpServers": true,

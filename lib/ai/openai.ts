@@ -18,6 +18,7 @@
 
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
+import * as Sentry from "@sentry/nextjs";
 import {
   JobDescription,
   CandidateProfile,
@@ -55,6 +56,9 @@ function getOpenAIClient(): OpenAI {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY environment variable is not set");
     }
+
+    // OpenAI client is automatically instrumented by Sentry.openAIIntegration()
+    // configured in sentry.server.config.ts
     openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
@@ -163,12 +167,12 @@ function buildQuestionPrompt(
   // Format projects for the prompt
   const projectsText = candidate.projects
     ? candidate.projects
-        .slice(0, 5)
-        .map(
-          (p) =>
-            `- ${p.name} (${p.language}, ${p.stars} stars): ${p.description || "No description"}`
-        )
-        .join("\n")
+      .slice(0, 5)
+      .map(
+        (p) =>
+          `- ${p.name} (${p.language}, ${p.stars} stars): ${p.description || "No description"}`
+      )
+      .join("\n")
     : "No public projects available";
 
   return `JOB DETAILS:
@@ -230,44 +234,58 @@ export async function generateInterviewQuestions(
   job: JobDescription,
   candidate: CandidateProfile
 ): Promise<QuestionSet> {
-  await rateLimiter.wait();
-  const openai = getOpenAIClient();
+  return await Sentry.startSpan(
+    {
+      name: "ai.generate_interview_questions",
+      op: "ai.operation",
+      attributes: {
+        "ai.operation": "question-generation",
+        "job.title": job.title,
+        "job.level": job.level,
+        "candidate.name": candidate.name,
+      },
+    },
+    async () => {
+      await rateLimiter.wait();
+      const openai = getOpenAIClient();
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: AI_CONFIG.model,
-    messages: [
-      { role: "system", content: QUESTION_SYSTEM_PROMPT },
-      { role: "user", content: buildQuestionPrompt(job, candidate) },
-    ],
-    response_format: zodResponseFormat(QuestionSetSchema, "interview_questions"),
-    temperature: AI_CONFIG.temperature,
-  });
+      const completion = await openai.beta.chat.completions.parse({
+        model: AI_CONFIG.model,
+        messages: [
+          { role: "system", content: QUESTION_SYSTEM_PROMPT },
+          { role: "user", content: buildQuestionPrompt(job, candidate) },
+        ],
+        response_format: zodResponseFormat(QuestionSetSchema, "interview_questions"),
+        temperature: AI_CONFIG.temperature,
+      });
 
-  const questionSet = completion.choices[0].message.parsed;
+      const questionSet = completion.choices[0].message.parsed;
 
-  if (!questionSet) {
-    throw new Error("Failed to generate questions: No response from OpenAI");
-  }
+      if (!questionSet) {
+        throw new Error("Failed to generate questions: No response from OpenAI");
+      }
 
-  // Group questions by category
-  const groupedByCategory: Record<QuestionCategory, GeneratedQuestion[]> = {
-    technical: [],
-    behavioral: [],
-    "system-design": [],
-    "problem-solving": [],
-    "culture-fit": [],
-  };
+      // Group questions by category
+      const groupedByCategory: Record<QuestionCategory, GeneratedQuestion[]> = {
+        technical: [],
+        behavioral: [],
+        "system-design": [],
+        "problem-solving": [],
+        "culture-fit": [],
+      };
 
-  questionSet.questions.forEach((q) => {
-    if (groupedByCategory[q.category]) {
-      groupedByCategory[q.category].push(q);
+      questionSet.questions.forEach((q) => {
+        if (groupedByCategory[q.category]) {
+          groupedByCategory[q.category].push(q);
+        }
+      });
+
+      return {
+        ...questionSet,
+        groupedByCategory,
+      };
     }
-  });
-
-  return {
-    ...questionSet,
-    groupedByCategory,
-  };
+  );
 }
 
 // ============================================================
@@ -313,10 +331,21 @@ export async function generateFollowUpQuestion(
   candidateAnswer: string,
   job: JobDescription
 ): Promise<FollowUpResponse> {
-  await rateLimiter.wait();
-  const openai = getOpenAIClient();
+  return await Sentry.startSpan(
+    {
+      name: "ai.generate_follow_up",
+      op: "ai.operation",
+      attributes: {
+        "ai.operation": "follow-up",
+        "question.category": originalQuestion.category,
+        "job.title": job.title,
+      },
+    },
+    async () => {
+      await rateLimiter.wait();
+      const openai = getOpenAIClient();
 
-  const userPrompt = `ORIGINAL QUESTION: ${originalQuestion.question}
+      const userPrompt = `ORIGINAL QUESTION: ${originalQuestion.question}
 
 CANDIDATE'S ANSWER: ${candidateAnswer}
 
@@ -327,23 +356,25 @@ JOB CONTEXT:
 
 Based on the candidate's answer, generate ONE intelligent follow-up question that probes deeper into their understanding or reveals how they handle edge cases.`;
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: AI_CONFIG.model,
-    messages: [
-      { role: "system", content: FOLLOW_UP_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: zodResponseFormat(FollowUpResponseSchema, "follow_up"),
-    temperature: AI_CONFIG.temperature,
-  });
+      const completion = await openai.beta.chat.completions.parse({
+        model: AI_CONFIG.model,
+        messages: [
+          { role: "system", content: FOLLOW_UP_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: zodResponseFormat(FollowUpResponseSchema, "follow_up"),
+        temperature: AI_CONFIG.temperature,
+      });
 
-  const followUp = completion.choices[0].message.parsed;
+      const followUp = completion.choices[0].message.parsed;
 
-  if (!followUp) {
-    throw new Error("Failed to generate follow-up question");
-  }
+      if (!followUp) {
+        throw new Error("Failed to generate follow-up question");
+      }
 
-  return followUp;
+      return followUp;
+    }
+  );
 }
 
 // ============================================================
@@ -409,10 +440,22 @@ export async function scoreCandidate(
     description: string;
   }
 ): Promise<MatchScore> {
-  await rateLimiter.wait();
-  const openai = getOpenAIClient();
+  return await Sentry.startSpan(
+    {
+      name: "ai.score_candidate",
+      op: "ai.operation",
+      attributes: {
+        "ai.operation": "scoring",
+        "job.title": job.title,
+        "job.level": job.level,
+        "candidate.years_experience": candidate.years_of_experience || 0,
+      },
+    },
+    async () => {
+      await rateLimiter.wait();
+      const openai = getOpenAIClient();
 
-  const userPrompt = `
+      const userPrompt = `
 JOB REQUIREMENTS:
 - Title: ${job.title}
 - Level: ${job.level}
@@ -432,23 +475,25 @@ ${candidate.resume_text.slice(0, 2000)}
 
 Evaluate this candidate's fit for the role.`;
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: AI_CONFIG.model,
-    messages: [
-      { role: "system", content: SCORING_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: zodResponseFormat(MatchScoreSchema, "match_score"),
-    temperature: 0.5,
-  });
+      const completion = await openai.beta.chat.completions.parse({
+        model: AI_CONFIG.model,
+        messages: [
+          { role: "system", content: SCORING_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: zodResponseFormat(MatchScoreSchema, "match_score"),
+        temperature: 0.5,
+      });
 
-  const matchScore = completion.choices[0].message.parsed;
+      const matchScore = completion.choices[0].message.parsed;
 
-  if (!matchScore) {
-    throw new Error("Failed to score candidate");
-  }
+      if (!matchScore) {
+        throw new Error("Failed to score candidate");
+      }
 
-  return matchScore;
+      return matchScore;
+    }
+  );
 }
 
 // ============================================================
@@ -491,26 +536,38 @@ Be thorough and precise. Missing information is better than guessed information.
  * console.log(parsed.years_of_experience); // 5
  */
 export async function parseResume(resumeText: string): Promise<ParsedResume> {
-  await rateLimiter.wait();
-  const openai = getOpenAIClient();
+  return await Sentry.startSpan(
+    {
+      name: "ai.parse_resume",
+      op: "ai.operation",
+      attributes: {
+        "ai.operation": "resume-parsing",
+        "resume.length": resumeText.length,
+      },
+    },
+    async () => {
+      await rateLimiter.wait();
+      const openai = getOpenAIClient();
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: AI_CONFIG.model,
-    messages: [
-      { role: "system", content: RESUME_SYSTEM_PROMPT },
-      { role: "user", content: `Parse this resume:\n\n${resumeText}` },
-    ],
-    response_format: zodResponseFormat(ParsedResumeSchema, "parsed_resume"),
-    temperature: 0.3, // Lower temperature for more consistent extraction
-  });
+      const completion = await openai.beta.chat.completions.parse({
+        model: AI_CONFIG.model,
+        messages: [
+          { role: "system", content: RESUME_SYSTEM_PROMPT },
+          { role: "user", content: `Parse this resume:\n\n${resumeText}` },
+        ],
+        response_format: zodResponseFormat(ParsedResumeSchema, "parsed_resume"),
+        temperature: 0.3, // Lower temperature for more consistent extraction
+      });
 
-  const parsedResume = completion.choices[0].message.parsed;
+      const parsedResume = completion.choices[0].message.parsed;
 
-  if (!parsedResume) {
-    throw new Error("Failed to parse resume");
-  }
+      if (!parsedResume) {
+        throw new Error("Failed to parse resume");
+      }
 
-  return parsedResume;
+      return parsedResume;
+    }
+  );
 }
 
 // ============================================================
@@ -567,17 +624,28 @@ export async function evaluateAnswer(
   jobContext: string,
   candidateBackground: string
 ): Promise<AnswerEvaluation> {
-  await rateLimiter.wait();
-  const openai = getOpenAIClient();
+  return await Sentry.startSpan(
+    {
+      name: "ai.evaluate_answer",
+      op: "ai.operation",
+      attributes: {
+        "ai.operation": "answer-evaluation",
+        "question.category": question.category,
+        "answer.length": answer.length,
+      },
+    },
+    async () => {
+      await rateLimiter.wait();
+      const openai = getOpenAIClient();
 
-  const rubricText = question.scoring_rubric
-    .map(
-      (r) =>
-        `- ${r.aspect} (weight: ${r.weight}): Excellent: ${r.excellent}, Good: ${r.good}, Needs Work: ${r.needsWork}`
-    )
-    .join("\n");
+      const rubricText = question.scoring_rubric
+        .map(
+          (r) =>
+            `- ${r.aspect} (weight: ${r.weight}): Excellent: ${r.excellent}, Good: ${r.good}, Needs Work: ${r.needsWork}`
+        )
+        .join("\n");
 
-  const userPrompt = `
+      const userPrompt = `
 QUESTION: ${question.text}
 CATEGORY: ${question.category}
 
@@ -593,23 +661,25 @@ CANDIDATE BACKGROUND: ${candidateBackground}
 
 Evaluate this answer against each aspect of the scoring rubric.`;
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: AI_CONFIG.model,
-    messages: [
-      { role: "system", content: EVALUATION_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: zodResponseFormat(AnswerEvaluationSchema, "evaluation"),
-    temperature: 0.5,
-  });
+      const completion = await openai.beta.chat.completions.parse({
+        model: AI_CONFIG.model,
+        messages: [
+          { role: "system", content: EVALUATION_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: zodResponseFormat(AnswerEvaluationSchema, "evaluation"),
+        temperature: 0.5,
+      });
 
-  const evaluation = completion.choices[0].message.parsed;
+      const evaluation = completion.choices[0].message.parsed;
 
-  if (!evaluation) {
-    throw new Error("Failed to evaluate answer");
-  }
+      if (!evaluation) {
+        throw new Error("Failed to evaluate answer");
+      }
 
-  return evaluation;
+      return evaluation;
+    }
+  );
 }
 
 // ============================================================
@@ -664,10 +734,21 @@ export async function generateJobDescription(options: {
   department?: string;
   location?: string;
 }): Promise<string> {
-  await rateLimiter.wait();
-  const openai = getOpenAIClient();
+  return await Sentry.startSpan(
+    {
+      name: "ai.generate_job_description",
+      op: "ai.operation",
+      attributes: {
+        "ai.operation": "job-description",
+        "job.title": options.title,
+        "job.level": options.level || "unspecified",
+      },
+    },
+    async () => {
+      await rateLimiter.wait();
+      const openai = getOpenAIClient();
 
-  const userPrompt = `Generate a compelling job description for:
+      const userPrompt = `Generate a compelling job description for:
 - Title: ${options.title}
 - Level: ${options.level || "Not specified"}
 - Department: ${options.department || "Not specified"}
@@ -677,21 +758,23 @@ ${options.base_description ? `\nBase description to enhance:\n${options.base_des
 
 Create an engaging, inclusive job description that will attract top talent.`;
 
-  const completion = await openai.chat.completions.create({
-    model: AI_CONFIG.model,
-    messages: [
-      { role: "system", content: JOB_DESCRIPTION_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.7,
-    max_tokens: 1500,
-  });
+      const completion = await openai.chat.completions.create({
+        model: AI_CONFIG.model,
+        messages: [
+          { role: "system", content: JOB_DESCRIPTION_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 1500,
+      });
 
-  const description = completion.choices[0]?.message?.content;
+      const description = completion.choices[0]?.message?.content;
 
-  if (!description) {
-    throw new Error("Failed to generate job description");
-  }
+      if (!description) {
+        throw new Error("Failed to generate job description");
+      }
 
-  return description;
+      return description;
+    }
+  );
 }

@@ -15,8 +15,25 @@ Sentry.init({
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
-  // Privacy: DO NOT send user PII
-  sendDefaultPii: false,
+  // AI Agents Insights: Enable to capture LLM prompts and responses
+  // Note: AI prompts in this app don't contain user PII, only job/candidate data
+  sendDefaultPii: true,
+
+  // Add OpenAI integration for AI Agents Insights
+  integrations: [
+    Sentry.openAIIntegration({
+      recordInputs: true,  // Capture prompts
+      recordOutputs: true, // Capture responses
+    }),
+  ],
+
+  // Add tags for filtering in Sentry AI Agents dashboard
+  initialScope: {
+    tags: {
+      project: "lontario-yc",
+      ai_enabled: "true",
+    },
+  },
 
   // Scrub sensitive data before sending to Sentry
   beforeSend(event) {
