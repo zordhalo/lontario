@@ -6,3 +6,4 @@ export * from "./use-dashboard";
 export * from "./use-ai";
 export * from "./use-toast";
 export * from "./use-mobile";
+export * from "./use-profile";

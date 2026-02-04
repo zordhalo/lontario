@@ -10,20 +10,13 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-
-// #region agent log
-fetch('http://127.0.0.1:7243/ingest/7c4bf3a4-0f60-40ce-82a9-6233b2ea9862',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app-header.tsx:13',message:'Module evaluation - checking imports',data:{briefcaseDefined:typeof Briefcase!=='undefined',layoutDashboardDefined:typeof LayoutDashboard!=='undefined',calendarDefined:typeof Calendar!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
+import { ProfileDropdown } from "@/components/profile-dropdown"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Jobs", href: "/jobs", icon: Briefcase },
   { name: "Interviews", href: "/interviews", icon: Calendar },
 ]
-
-// #region agent log
-fetch('http://127.0.0.1:7243/ingest/7c4bf3a4-0f60-40ce-82a9-6233b2ea9862',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app-header.tsx:18',message:'Navigation array created',data:{navLength:navigation.length,hasBriefcase:navigation.some(n=>n.icon===Briefcase)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
 
 export function AppHeader() {
   const pathname = usePathname()
@@ -72,6 +65,7 @@ export function AppHeader() {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
+          <ProfileDropdown />
         </div>
       </div>
     </header>
