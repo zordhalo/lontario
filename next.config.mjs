@@ -12,6 +12,7 @@ const nextConfig = {
     turbo: {
       root: '.', // Explicitly set root to fix Turbopack detection
     },
+    serverExternalPackages: ['import-in-the-middle', 'require-in-the-middle'],
   },
 };
 
