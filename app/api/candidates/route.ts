@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { processAndScoreCandidate } from "@/lib/ai";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schemas
 const listCandidatesSchema = z.object({
@@ -46,13 +46,11 @@ const createCandidateSchema = z.object({
 
 /**
  * GET /api/candidates
- * List candidates for a job (MVP: no auth required)
+ * List candidates for a job. Requires recruiter session.
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // MVP: Auth disabled
+    const { supabase } = await requireRecruiter();
 
     // Parse and validate query parameters
     const searchParams = Object.fromEntries(req.nextUrl.searchParams);
@@ -72,7 +70,8 @@ export async function GET(req: NextRequest) {
       validation.data;
     const offset = (page - 1) * limit;
 
-    // MVP: Skip job ownership check - just verify job exists
+    // RLS on `jobs` restricts visibility to the recruiter; this both verifies
+    // the job exists and that the recruiter owns it.
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .select("id")
@@ -175,6 +174,8 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/candidates:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -185,11 +186,12 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/candidates
- * Create a new candidate (for public applications or manual entry)
+ * Manual candidate entry by recruiter. Public applications use
+ * `/api/public/apply`, which is owned by w3-public-api.
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -276,6 +278,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(candidate, { status: 201 });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in POST /api/candidates:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

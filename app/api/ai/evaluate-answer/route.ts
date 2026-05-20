@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { evaluateAnswer } from "@/lib/ai";
 import { ScoringCriteriaSchema } from "@/types";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const evaluateAnswerSchema = z.object({
@@ -17,11 +18,15 @@ const evaluateAnswerSchema = z.object({
 
 /**
  * POST /api/ai/evaluate-answer
- * Evaluate a candidate's interview answer using AI (MVP: no auth required)
+ * Evaluate a candidate's interview answer using AI. Requires recruiter session.
+ *
+ * NOTE for w3-ai-cost-controls: candidate-submitted answers are evaluated
+ * inside `/api/interviews/[id]/submit` (token-gated). This endpoint is for
+ * recruiter-triggered re-evaluation only.
  */
 export async function POST(req: NextRequest) {
   try {
-    // MVP: Auth disabled
+    await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -49,6 +54,8 @@ export async function POST(req: NextRequest) {
       evaluated_at: new Date().toISOString(),
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Error evaluating answer:", error);
 
     if (error instanceof Error) {

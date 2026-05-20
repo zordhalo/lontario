@@ -294,7 +294,7 @@ export default function InterviewsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={`/jobs/${interview.job_id}`}>
+                          <Link href={`/dashboard/jobs/${interview.job_id}`}>
                             View Candidate
                           </Link>
                         </DropdownMenuItem>

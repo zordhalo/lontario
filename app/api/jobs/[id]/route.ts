@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema for updates
 const updateJobSchema = z.object({
@@ -33,16 +33,16 @@ interface RouteParams {
 
 /**
  * GET /api/jobs/[id]
- * Get a single job with candidate summary (MVP: no auth required)
+ * Get a single job with candidate summary. Requires recruiter session.
+ *
+ * Public job board reads go through `/api/public/jobs/[id]`.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
-    // MVP: Auth disabled
-
-    // Fetch job
+    // Fetch job (RLS scopes to recruiter-owned)
     const { data: job, error: jobError } = await supabase
       .from("jobs")
       .select("*")
@@ -95,6 +95,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       },
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/jobs/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -105,14 +107,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
 /**
  * PUT /api/jobs/[id]
- * Update a job (MVP: no auth required)
+ * Update a job. Requires recruiter session.
  */
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
-    // MVP: Auth disabled
+    const { supabase } = await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -160,6 +160,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(job);
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in PUT /api/jobs/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -170,16 +172,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 
 /**
  * DELETE /api/jobs/[id]
- * Delete a job (MVP: no auth required)
+ * Delete a job. Requires recruiter session.
  */
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
-    // MVP: Auth disabled
-
-    // Delete job (cascades to candidates)
+    // Delete job (cascades to candidates; RLS enforces ownership).
     const { error: deleteError } = await supabase
       .from("jobs")
       .delete()
@@ -195,6 +195,8 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in DELETE /api/jobs/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

@@ -8,11 +8,14 @@ interface RouteParams {
 
 /**
  * POST /api/interviews/[id]/start
- * Candidate starts their interview (validates token and time)
+ * Candidate starts their interview. Auth is via `access_token` on the
+ * `ai_interviews` row — candidates have no recruiter session. The token
+ * must match the interview row, otherwise we return 401. We use the admin
+ * client here intentionally because (a) the candidate is not an
+ * authenticated Supabase user, and (b) RLS for `ai_interviews` restricts
+ * SELECT to the recruiter; the admin client lets us validate the token
+ * server-side without exposing the table to anon SELECT.
  *
- * This endpoint is used by the public interview page.
- * Authentication is via the access_token, not user session.
- * 
  * The [id] parameter can be either the interview ID or the access_token.
  * For public interview links, the access_token is used as the route param.
  */
@@ -32,7 +35,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Use admin client since this is a public endpoint (no user session)
+    // Admin client: candidate has no Supabase session; token is the auth.
+    // The query below filters by access_token, so we never read a row the
+    // caller hasn't proven they hold the token for.
     const supabase = createAdminClient();
 
     // Build query - support lookup by access_token (for public interview links)
@@ -242,6 +247,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get("token");
 
+    // Admin client: candidate has no Supabase session; token is the auth.
+    // GET (preflight) accepts the token via query param or via the [id]
+    // segment of the public /interview/[token] URL.
     const supabase = createAdminClient();
 
     // Build query - support lookup by access_token (for public interview links)

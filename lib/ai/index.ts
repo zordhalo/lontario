@@ -13,6 +13,7 @@ export {
   fetchGitHubProfile,
   extractGitHubUsername,
   isGitHubUrl,
+  validateGitHubUser,
 } from "./github";
 
 export {

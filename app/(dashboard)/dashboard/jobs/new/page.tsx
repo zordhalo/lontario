@@ -188,7 +188,7 @@ We're building something special, and we'd love for you to be a part of it. Appl
       const jobData = transformFormData()
       await createJob.mutateAsync({ ...jobData, status: "active" })
       toast.success("Job published successfully!")
-      router.push("/jobs")
+      router.push("/dashboard/jobs")
     } catch (error) {
       console.error("Failed to create job:", error)
       toast.error(error instanceof Error ? error.message : "Failed to create job")
@@ -203,7 +203,7 @@ We're building something special, and we'd love for you to be a part of it. Appl
       const jobData = transformFormData()
       await createJob.mutateAsync(jobData)
       toast.success("Draft saved successfully!")
-      router.push("/jobs")
+      router.push("/dashboard/jobs")
     } catch (error) {
       console.error("Failed to save draft:", error)
       toast.error(error instanceof Error ? error.message : "Failed to save draft")
@@ -234,7 +234,7 @@ We're building something special, and we'd love for you to be a part of it. Appl
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbLink href="/jobs">Jobs</BreadcrumbLink>
+                <BreadcrumbLink href="/dashboard/jobs">Jobs</BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
@@ -245,7 +245,7 @@ We're building something special, and we'd love for you to be a part of it. Appl
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/jobs">
+              <Link href="/dashboard/jobs">
                 <Button variant="ghost" size="icon">
                   <ArrowLeft className="h-4 w-4" />
                   <span className="sr-only">Back to Jobs</span>

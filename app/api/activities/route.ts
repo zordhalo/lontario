@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema for query parameters
 const listActivitiesSchema = z.object({
@@ -10,11 +10,11 @@ const listActivitiesSchema = z.object({
 
 /**
  * GET /api/activities
- * List recent activities across all candidates (MVP: no auth required)
+ * List recent activities across all candidates. Requires recruiter session.
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     // Parse and validate query parameters
     const searchParams = Object.fromEntries(req.nextUrl.searchParams);
@@ -132,6 +132,8 @@ export async function GET(req: NextRequest) {
       activities: formattedActivities,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/activities:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

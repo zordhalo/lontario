@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { generateJobDescription } from "@/lib/ai";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schemas
 const createJobSchema = z.object({
@@ -36,13 +36,13 @@ const listJobsSchema = z.object({
 
 /**
  * GET /api/jobs
- * List all jobs (MVP: no auth required)
+ * List jobs owned by the recruiter. Requires recruiter session.
+ *
+ * The public job board uses `/api/public/jobs`, owned by w3-public-api.
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // MVP: Auth disabled - all jobs accessible
+    const { supabase } = await requireRecruiter();
 
     // Parse and validate query parameters
     const searchParams = Object.fromEntries(req.nextUrl.searchParams);
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     const { status, include_archived, page, limit, sort, order } = validation.data;
     const offset = (page - 1) * limit;
 
-    // Build query - MVP: no user filter
+    // RLS scopes `jobs` to rows where created_by = auth.uid()
     let query = supabase
       .from("jobs")
       .select("*", { count: "exact" })
@@ -130,6 +130,8 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/jobs:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -138,40 +140,14 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// MVP placeholder user ID (used when auth is disabled)
-const MVP_USER_ID = "00000000-0000-0000-0000-000000000000";
-
-// Ensure MVP placeholder profile exists
-async function ensureMvpProfile(supabase: ReturnType<typeof createAdminClient>) {
-  const { error } = await supabase
-    .from("profiles")
-    .upsert(
-      {
-        id: MVP_USER_ID,
-        email: "mvp@placeholder.local",
-        full_name: "MVP User",
-        role: "recruiter",
-      },
-      { onConflict: "id" }
-    );
-
-  if (error) {
-    console.error("Failed to ensure MVP profile:", error);
-    throw new Error("Failed to create MVP profile for job creation");
-  }
-}
-
 /**
  * POST /api/jobs
- * Create a new job posting (MVP: no auth required)
+ * Create a new job posting. Requires recruiter session; `created_by` is the
+ * authenticated user.
  */
 export async function POST(req: NextRequest) {
   try {
-    // MVP: Use admin client to bypass RLS (no auth required)
-    const supabase = createAdminClient();
-
-    // Ensure MVP placeholder profile exists for foreign key constraint
-    await ensureMvpProfile(supabase);
+    const { user, supabase } = await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -208,7 +184,7 @@ export async function POST(req: NextRequest) {
     const { data: job, error: insertError } = await supabase
       .from("jobs")
       .insert({
-        created_by: MVP_USER_ID,
+        created_by: user.id,
         title: jobData.title,
         level: jobData.level,
         department: jobData.department,
@@ -236,6 +212,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(job, { status: 201 });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in POST /api/jobs:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

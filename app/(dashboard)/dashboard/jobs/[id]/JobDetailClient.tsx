@@ -244,7 +244,7 @@ export default function JobDetailClient({ jobId }: JobDetailClientProps) {
           <p className="text-muted-foreground mb-4">
             {jobError?.message || "The job you're looking for doesn't exist."}
           </p>
-          <Link href="/jobs">
+          <Link href="/dashboard/jobs">
             <Button>Back to Jobs</Button>
           </Link>
         </div>
@@ -298,7 +298,7 @@ export default function JobDetailClient({ jobId }: JobDetailClientProps) {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbLink href="/jobs">Jobs</BreadcrumbLink>
+                <BreadcrumbLink href="/dashboard/jobs">Jobs</BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>

@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 /**
  * POST /api/interviews/:id/review
- * Mark an interview summary as reviewed
- * 
- * This endpoint is called when a recruiter views a completed interview summary.
- * It sets the reviewed_at timestamp, which removes the interview from the
- * "Needs Your Attention" alerts on the dashboard.
- * 
- * MVP: No authentication required. In production, reviewed_by would be set
- * to the authenticated user's ID.
+ * Mark an interview summary as reviewed. Requires recruiter session.
+ *
+ * This endpoint is called when a recruiter views a completed interview
+ * summary. It sets the reviewed_at and reviewed_by columns, which removes
+ * the interview from the "Needs Your Attention" alerts on the dashboard.
  */
 export async function POST(
   request: Request,
@@ -26,7 +23,7 @@ export async function POST(
       );
     }
 
-    const supabase = await createClient();
+    const { user, supabase } = await requireRecruiter();
 
     // First, check if the interview exists and is completed
     const { data: interview, error: fetchError } = await supabase
@@ -76,7 +73,7 @@ export async function POST(
       .from("ai_interviews")
       .update({
         reviewed_at: now,
-        // reviewed_by: userId, // TODO: Add when auth is implemented
+        reviewed_by: user.id,
         updated_at: now,
       })
       .eq("id", id)
@@ -97,6 +94,8 @@ export async function POST(
       already_reviewed: false,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in POST /api/interviews/:id/review:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -107,9 +106,8 @@ export async function POST(
 
 /**
  * DELETE /api/interviews/:id/review
- * Unmark an interview as reviewed (mark as needing attention again)
- * 
- * Useful if a recruiter wants to revisit an interview later
+ * Unmark an interview as reviewed (mark as needing attention again).
+ * Requires recruiter session.
  */
 export async function DELETE(
   request: Request,
@@ -125,7 +123,7 @@ export async function DELETE(
       );
     }
 
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     const { data: updatedInterview, error: updateError } = await supabase
       .from("ai_interviews")
@@ -157,6 +155,8 @@ export async function DELETE(
       reviewed_at: null,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in DELETE /api/interviews/:id/review:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

@@ -217,6 +217,27 @@ function getEmailContent(
   }
 }
 
+// ============================================================
+// PUBLIC FUNNEL EMAILS (apply + waitlist)
+// ============================================================
+// Re-exported from dedicated modules so callers can import everything email-
+// related from "@/lib/email" if they prefer. These modules use their own
+// non-throwing failure contract — see lib/email/applications.ts for details.
+
+export {
+  sendApplicationReceivedEmail,
+  sendNewApplicationNotification,
+  type EmailSendResult,
+  type SendApplicationReceivedInput,
+  type SendNewApplicationNotificationInput,
+} from "./applications";
+
+export {
+  sendWaitlistConfirmation,
+  type WaitlistSendResult,
+  type SendWaitlistConfirmationInput,
+} from "./waitlist";
+
 /**
  * Batch send emails (for reminders cron)
  */

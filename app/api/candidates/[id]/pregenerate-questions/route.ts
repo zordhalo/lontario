@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { generateInterviewQuestions } from "@/lib/ai/openai";
 import {
   JobDescription,
   CandidateProfile,
   GeneratedQuestion,
 } from "@/types";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
+
+// NOTE for w3-ai-cost-controls: `lib/ai/scoring.ts:processAndScoreCandidate`
+// invokes this endpoint via an in-process HTTP fetch from the public apply
+// flow (which has no recruiter session). Once this route requires a
+// recruiter session, that self-fetch will start failing. The scoring
+// pipeline should call the underlying helper directly instead of going back
+// out through HTTP.
 
 /**
  * POST /api/candidates/[id]/pregenerate-questions
@@ -18,7 +25,7 @@ export async function POST(
 ) {
   try {
     const { id: candidateId } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     // Fetch candidate
     const { data: candidate, error: candidateError } = await supabase
@@ -199,6 +206,8 @@ export async function POST(
       );
     }
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Pregenerate questions error:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -209,7 +218,8 @@ export async function POST(
 
 /**
  * GET /api/candidates/[id]/pregenerate-questions
- * Check the status of pre-generated questions for a candidate
+ * Check the status of pre-generated questions for a candidate.
+ * Requires recruiter session.
  */
 export async function GET(
   request: NextRequest,
@@ -217,7 +227,7 @@ export async function GET(
 ) {
   try {
     const { id: candidateId } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     // Fetch candidate to get job_id
     const { data: candidate, error: candidateError } = await supabase
@@ -260,6 +270,8 @@ export async function GET(
       used_in_interview_id: pregeneratedQuestions.used_in_interview_id,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Get pregenerated questions error:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

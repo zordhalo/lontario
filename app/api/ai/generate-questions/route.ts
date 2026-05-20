@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { generateInterviewQuestions } from "@/lib/ai";
 import { JobDescriptionSchema, CandidateProfileSchema, QuestionCategory, GeneratedQuestion } from "@/types";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const generateQuestionsSchema = z.object({
@@ -13,16 +13,12 @@ const generateQuestionsSchema = z.object({
 
 /**
  * POST /api/ai/generate-questions
- * Generate personalized interview questions for a candidate
+ * Generate personalized interview questions for a candidate.
+ * Requires recruiter session.
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Verify authentication (optional for demo, required for production)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { user } = await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -66,9 +62,11 @@ export async function POST(req: NextRequest) {
       groupedByCategory,
       totalEstimatedTime,
       generated_at: new Date().toISOString(),
-      generated_by: user?.id || "anonymous",
+      generated_by: user.id,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Error generating questions:", error);
 
     // Handle specific OpenAI errors

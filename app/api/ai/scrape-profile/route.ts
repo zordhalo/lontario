@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import {
   fetchGitHubProfile,
@@ -9,6 +8,7 @@ import {
   isGitHubUrl,
   isLinkedInUrl,
 } from "@/lib/ai";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const scrapeProfileSchema = z.object({
@@ -18,16 +18,11 @@ const scrapeProfileSchema = z.object({
 
 /**
  * POST /api/ai/scrape-profile
- * Fetch candidate profile from GitHub or LinkedIn
+ * Fetch candidate profile from GitHub or LinkedIn. Requires recruiter session.
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Verify authentication (optional for demo)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -95,6 +90,8 @@ export async function POST(req: NextRequest) {
       fetched_at: new Date().toISOString(),
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Error scraping profile:", error);
 
     if (error instanceof Error) {

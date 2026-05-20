@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { generateFollowUpQuestion } from "@/lib/ai";
 import { GeneratedQuestionSchema, JobDescriptionSchema } from "@/types";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const followUpSchema = z.object({
@@ -13,16 +13,12 @@ const followUpSchema = z.object({
 
 /**
  * POST /api/ai/follow-up
- * Generate an intelligent follow-up question based on candidate's answer
+ * Generate an intelligent follow-up question based on candidate's answer.
+ * Requires recruiter session.
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    // Verify authentication (optional for demo)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -49,6 +45,8 @@ export async function POST(req: NextRequest) {
       generated_at: new Date().toISOString(),
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Error generating follow-up:", error);
 
     if (error instanceof Error) {

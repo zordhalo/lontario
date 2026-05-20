@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CandidateStage } from "@/types";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const moveCandidateSchema = z.object({
@@ -25,19 +25,14 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// MVP placeholder user ID (used when auth is disabled)
-const MVP_USER_ID = "00000000-0000-0000-0000-000000000000";
-
 /**
  * POST /api/candidates/[id]/move
- * Move a candidate to a new stage (MVP: no auth required)
+ * Move a candidate to a new stage. Requires recruiter session.
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
-    // MVP: Auth disabled
+    const { user, supabase } = await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -79,7 +74,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // MVP: Skip job ownership check
+    // Ownership: RLS on the !inner join to `jobs` already rejected non-owned
+    // candidates above.
 
     // Supabase types joined rows as arrays even with !inner — normalize to first row.
     const jobField = candidate.job as
@@ -122,7 +118,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       .from("candidate_activities")
       .insert({
         candidate_id: id,
-        performed_by: MVP_USER_ID,
+        performed_by: user.id,
         activity_type: stage === "rejected" ? "rejected" : "stage_changed",
         old_value: oldStage,
         new_value: stage,
@@ -145,6 +141,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       activity: activity || null,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in POST /api/candidates/[id]/move:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

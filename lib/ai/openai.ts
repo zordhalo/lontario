@@ -20,6 +20,14 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import * as Sentry from "@sentry/nextjs";
 import {
+  BudgetExceededError,
+  checkBudgetOk,
+  estimateCost,
+  recordSpend,
+} from "@/lib/ai/budget";
+
+export { BudgetExceededError };
+import {
   JobDescription,
   CandidateProfile,
   QuestionSetSchema,
@@ -84,28 +92,60 @@ export const AI_CONFIG = {
 } as const;
 
 /**
- * Simple rate limiter to prevent API quota exhaustion
- * Ensures minimum interval between API calls
+ * Per-call timeouts (ms). Vercel functions can hang for the full
+ * `maxDuration` (60–300s) if the upstream stream stalls — set explicit
+ * `AbortSignal.timeout()` on every OpenAI call.
  */
-const rateLimiter = {
-  lastCall: 0,
-  minInterval: 100, // ms between calls
+const TIMEOUTS = {
+  /** Short chat completions (follow-up, eval, job desc). */
+  SHORT_MS: 15_000,
+  /** Long structured output (questions, scoring, resume parse). */
+  LONG_MS: 30_000,
+} as const;
 
-  /**
-   * Waits if needed to respect rate limits
-   * Should be called before each API request
-   */
-  async wait() {
-    const now = Date.now();
-    const elapsed = now - this.lastCall;
-    if (elapsed < this.minInterval) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, this.minInterval - elapsed)
-      );
-    }
-    this.lastCall = Date.now();
-  },
-};
+/**
+ * Estimate input tokens from a string. OpenAI tokenization is roughly
+ * 1 token / 4 chars for English; close enough for a budget pre-check.
+ */
+function estimateInputTokens(...parts: string[]): number {
+  const total = parts.reduce((acc, p) => acc + (p?.length ?? 0), 0);
+  return Math.ceil(total / 4);
+}
+
+/**
+ * Budget pre-flight using the worst-case output (maxOutputTokens). Throws
+ * `BudgetExceededError` when the daily ceiling would be breached.
+ */
+async function assertBudget(
+  model: string,
+  inputTokens: number,
+  maxOutputTokens: number
+): Promise<void> {
+  const worstCase = estimateCost(model, inputTokens, maxOutputTokens);
+  const check = await checkBudgetOk(worstCase);
+  if (!check.ok) {
+    throw new BudgetExceededError(
+      `${check.reason} (spent $${check.spentUsd.toFixed(2)} / $${check.ceilingUsd.toFixed(2)})`
+    );
+  }
+}
+
+/**
+ * Record real spend from a completion's usage block. Best-effort; failures
+ * here do not affect the caller (the call already succeeded).
+ */
+async function bookSpend(
+  model: string,
+  usage?: { prompt_tokens?: number; completion_tokens?: number } | null
+): Promise<void> {
+  if (!usage) return;
+  const cost = estimateCost(
+    model,
+    usage.prompt_tokens ?? 0,
+    usage.completion_tokens ?? 0
+  );
+  await recordSpend(cost);
+}
 
 // ============================================================
 // INTERVIEW QUESTION GENERATION
@@ -246,18 +286,27 @@ export async function generateInterviewQuestions(
       },
     },
     async () => {
-      await rateLimiter.wait();
       const openai = getOpenAIClient();
+      const userPrompt = buildQuestionPrompt(job, candidate);
+      const maxOut = AI_CONFIG.maxTokens;
+      await assertBudget(
+        AI_CONFIG.model,
+        estimateInputTokens(QUESTION_SYSTEM_PROMPT, userPrompt),
+        maxOut
+      );
 
       const completion = await openai.beta.chat.completions.parse({
         model: AI_CONFIG.model,
         messages: [
           { role: "system", content: QUESTION_SYSTEM_PROMPT },
-          { role: "user", content: buildQuestionPrompt(job, candidate) },
+          { role: "user", content: userPrompt },
         ],
         response_format: zodResponseFormat(QuestionSetSchema, "interview_questions"),
         temperature: AI_CONFIG.temperature,
-      });
+        max_tokens: maxOut,
+      }, { signal: AbortSignal.timeout(TIMEOUTS.LONG_MS) });
+
+      await bookSpend(AI_CONFIG.model, completion.usage);
 
       const questionSet = completion.choices[0].message.parsed;
 
@@ -342,7 +391,6 @@ export async function generateFollowUpQuestion(
       },
     },
     async () => {
-      await rateLimiter.wait();
       const openai = getOpenAIClient();
 
       const userPrompt = `ORIGINAL QUESTION: ${originalQuestion.question}
@@ -356,6 +404,13 @@ JOB CONTEXT:
 
 Based on the candidate's answer, generate ONE intelligent follow-up question that probes deeper into their understanding or reveals how they handle edge cases.`;
 
+      const maxOut = 1024;
+      await assertBudget(
+        AI_CONFIG.model,
+        estimateInputTokens(FOLLOW_UP_SYSTEM_PROMPT, userPrompt),
+        maxOut
+      );
+
       const completion = await openai.beta.chat.completions.parse({
         model: AI_CONFIG.model,
         messages: [
@@ -364,7 +419,10 @@ Based on the candidate's answer, generate ONE intelligent follow-up question tha
         ],
         response_format: zodResponseFormat(FollowUpResponseSchema, "follow_up"),
         temperature: AI_CONFIG.temperature,
-      });
+        max_tokens: maxOut,
+      }, { signal: AbortSignal.timeout(TIMEOUTS.SHORT_MS) });
+
+      await bookSpend(AI_CONFIG.model, completion.usage);
 
       const followUp = completion.choices[0].message.parsed;
 
@@ -452,7 +510,6 @@ export async function scoreCandidate(
       },
     },
     async () => {
-      await rateLimiter.wait();
       const openai = getOpenAIClient();
 
       const userPrompt = `
@@ -475,6 +532,13 @@ ${candidate.resume_text.slice(0, 2000)}
 
 Evaluate this candidate's fit for the role.`;
 
+      const maxOut = 2048;
+      await assertBudget(
+        AI_CONFIG.model,
+        estimateInputTokens(SCORING_SYSTEM_PROMPT, userPrompt),
+        maxOut
+      );
+
       const completion = await openai.beta.chat.completions.parse({
         model: AI_CONFIG.model,
         messages: [
@@ -483,7 +547,10 @@ Evaluate this candidate's fit for the role.`;
         ],
         response_format: zodResponseFormat(MatchScoreSchema, "match_score"),
         temperature: 0.5,
-      });
+        max_tokens: maxOut,
+      }, { signal: AbortSignal.timeout(TIMEOUTS.LONG_MS) });
+
+      await bookSpend(AI_CONFIG.model, completion.usage);
 
       const matchScore = completion.choices[0].message.parsed;
 
@@ -546,18 +613,27 @@ export async function parseResume(resumeText: string): Promise<ParsedResume> {
       },
     },
     async () => {
-      await rateLimiter.wait();
       const openai = getOpenAIClient();
+      const userMsg = `Parse this resume:\n\n${resumeText}`;
+      const maxOut = 2048;
+      await assertBudget(
+        AI_CONFIG.model,
+        estimateInputTokens(RESUME_SYSTEM_PROMPT, userMsg),
+        maxOut
+      );
 
       const completion = await openai.beta.chat.completions.parse({
         model: AI_CONFIG.model,
         messages: [
           { role: "system", content: RESUME_SYSTEM_PROMPT },
-          { role: "user", content: `Parse this resume:\n\n${resumeText}` },
+          { role: "user", content: userMsg },
         ],
         response_format: zodResponseFormat(ParsedResumeSchema, "parsed_resume"),
         temperature: 0.3, // Lower temperature for more consistent extraction
-      });
+        max_tokens: maxOut,
+      }, { signal: AbortSignal.timeout(TIMEOUTS.LONG_MS) });
+
+      await bookSpend(AI_CONFIG.model, completion.usage);
 
       const parsedResume = completion.choices[0].message.parsed;
 
@@ -565,9 +641,33 @@ export async function parseResume(resumeText: string): Promise<ParsedResume> {
         throw new Error("Failed to parse resume");
       }
 
-      return parsedResume;
+      // The Zod schema chains `.nullable().optional()` on every soft field
+      // (required by OpenAI structured outputs). The consumer-facing
+      // `ParsedResume` interface uses `?: string` (undefined-only). Strip
+      // explicit nulls before returning so the types line up cleanly.
+      return stripNulls(parsedResume) as ParsedResume;
     }
   );
+}
+
+/**
+ * Recursively replace `null` with `undefined` so OpenAI structured-output
+ * blobs match our `?:`-typed interfaces.
+ */
+function stripNulls<T>(value: T): T {
+  if (value === null) return undefined as unknown as T;
+  if (Array.isArray(value)) {
+    return value.map((v) => stripNulls(v)) as unknown as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const cleaned = stripNulls(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    }
+    return out as T;
+  }
+  return value;
 }
 
 // ============================================================
@@ -635,7 +735,6 @@ export async function evaluateAnswer(
       },
     },
     async () => {
-      await rateLimiter.wait();
       const openai = getOpenAIClient();
 
       const rubricText = question.scoring_rubric
@@ -661,6 +760,13 @@ CANDIDATE BACKGROUND: ${candidateBackground}
 
 Evaluate this answer against each aspect of the scoring rubric.`;
 
+      const maxOut = 1024;
+      await assertBudget(
+        AI_CONFIG.model,
+        estimateInputTokens(EVALUATION_SYSTEM_PROMPT, userPrompt),
+        maxOut
+      );
+
       const completion = await openai.beta.chat.completions.parse({
         model: AI_CONFIG.model,
         messages: [
@@ -669,7 +775,10 @@ Evaluate this answer against each aspect of the scoring rubric.`;
         ],
         response_format: zodResponseFormat(AnswerEvaluationSchema, "evaluation"),
         temperature: 0.5,
-      });
+        max_tokens: maxOut,
+      }, { signal: AbortSignal.timeout(TIMEOUTS.SHORT_MS) });
+
+      await bookSpend(AI_CONFIG.model, completion.usage);
 
       const evaluation = completion.choices[0].message.parsed;
 
@@ -745,7 +854,6 @@ export async function generateJobDescription(options: {
       },
     },
     async () => {
-      await rateLimiter.wait();
       const openai = getOpenAIClient();
 
       const userPrompt = `Generate a compelling job description for:
@@ -758,6 +866,13 @@ ${options.base_description ? `\nBase description to enhance:\n${options.base_des
 
 Create an engaging, inclusive job description that will attract top talent.`;
 
+      const maxOut = 1500;
+      await assertBudget(
+        AI_CONFIG.model,
+        estimateInputTokens(JOB_DESCRIPTION_SYSTEM_PROMPT, userPrompt),
+        maxOut
+      );
+
       const completion = await openai.chat.completions.create({
         model: AI_CONFIG.model,
         messages: [
@@ -765,8 +880,10 @@ Create an engaging, inclusive job description that will attract top talent.`;
           { role: "user", content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 1500,
-      });
+        max_tokens: maxOut,
+      }, { signal: AbortSignal.timeout(TIMEOUTS.SHORT_MS) });
+
+      await bookSpend(AI_CONFIG.model, completion.usage);
 
       const description = completion.choices[0]?.message?.content;
 

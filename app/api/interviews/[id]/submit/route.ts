@@ -28,11 +28,13 @@ const SubmitInterviewSchema = z.object({
 
 /**
  * POST /api/interviews/[id]/submit
- * Submit all answers for an interview
+ * Submit all answers for an interview. Auth is via `access_token` on the
+ * `ai_interviews` row — candidates have no recruiter session. The token
+ * must match the interview row, otherwise we return 401.
  *
  * This endpoint processes all answers, evaluates them with AI,
  * calculates the overall score, and completes the interview.
- * 
+ *
  * The [id] parameter can be either the interview ID or the access_token.
  * For public interview links, the access_token is used as the route param.
  */
@@ -56,7 +58,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { token, answers } = validation.data;
 
-    // Use admin client since this is a public endpoint
+    // Admin client: candidate has no Supabase session; token is the auth.
+    // The query below filters by access_token, so we never read a row the
+    // caller hasn't proven they hold the token for.
     const supabase = createAdminClient();
 
     // Build query - support lookup by access_token (for public interview links)
@@ -338,8 +342,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH /api/interviews/[id]/submit
- * Submit a single answer (for real-time saving)
- * 
+ * Submit a single answer (for real-time saving). Auth is via `access_token`
+ * on the `ai_interviews` row — candidates have no recruiter session.
+ *
  * The [id] parameter can be either the interview ID or the access_token.
  * For public interview links, the access_token is used as the route param.
  */
@@ -360,6 +365,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Admin client: candidate has no Supabase session; token is the auth.
     const supabase = createAdminClient();
 
     // Build query - support lookup by access_token (for public interview links)

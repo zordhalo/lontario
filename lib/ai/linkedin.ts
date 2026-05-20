@@ -1,25 +1,32 @@
 /**
  * @fileoverview LinkedIn API integration via Proxycurl
- * 
- * This module fetches LinkedIn profiles using the Proxycurl API to extract:
- * - Name and bio from profile
- * - Skills from skills section and experience descriptions
- * - Work experience history
- * 
- * Requires PROXYCURL_API_KEY environment variable.
- * Falls back to GitHub or manual entry if not configured.
- * 
+ *
+ * Fetches LinkedIn profiles using Proxycurl to extract name, bio, skills, and
+ * work history.
+ *
+ * Wave 1 cost-DoS hardening:
+ *   - When `PROXYCURL_API_KEY` is unset, `fetchLinkedInProfile` returns
+ *     `null` cleanly instead of throwing. Scoring degrades gracefully.
+ *   - Every successful lookup is cached for 7 days — Proxycurl is the most
+ *     expensive call in the pipeline ($0.01–$0.10/lookup), so aggressive
+ *     caching is the single biggest cost lever.
+ *   - 8-second AbortSignal timeout so a slow Proxycurl response can't pin
+ *     a Vercel function open.
+ *   - The expensive `skills=include` flag is left ON only when the env var
+ *     `PROXYCURL_INCLUDE_SKILLS=1` is explicitly set — by default we use
+ *     the basic profile and rely on the keyword-grep heuristic below.
+ *
  * @module lib/ai/linkedin
  * @see https://nubela.co/proxycurl/
  */
 
 import axios from "axios";
 import { CandidateProfile } from "@/types";
+import { cacheGet, CACHE_TTL, cacheKey } from "@/lib/ai/cache";
 
-/** Proxycurl API endpoint for LinkedIn profiles */
 const PROXYCURL_API = "https://nubela.co/proxycurl/api/v2/linkedin";
+const PROXYCURL_TIMEOUT_MS = 8_000;
 
-/** Work experience entry from Proxycurl */
 interface ProxycurlExperience {
   title: string;
   company: string;
@@ -28,7 +35,6 @@ interface ProxycurlExperience {
   description?: string;
 }
 
-/** LinkedIn profile response from Proxycurl */
 interface ProxycurlProfile {
   first_name: string;
   last_name: string;
@@ -39,81 +45,71 @@ interface ProxycurlProfile {
 }
 
 /**
- * Fetches a candidate's profile from LinkedIn via Proxycurl API
- * Requires PROXYCURL_API_KEY environment variable
+ * Fetches a candidate's profile from LinkedIn via Proxycurl.
+ *
+ * Returns `null` when:
+ *   - `PROXYCURL_API_KEY` is unset (LinkedIn enrichment is optional)
+ *   - The profile is not found
+ *   - The call fails for any reason that should not block scoring
+ *
+ * Returns the cached value on repeated lookups within 7 days.
  */
 export async function fetchLinkedInProfile(
   profileUrl: string
-): Promise<CandidateProfile> {
+): Promise<CandidateProfile | null> {
   if (!process.env.PROXYCURL_API_KEY) {
-    throw new Error(
-      "LinkedIn API not configured. Please use manual input or GitHub profile instead."
-    );
+    return null;
   }
 
+  return cacheGet<CandidateProfile | null>(
+    cacheKey.proxycurl(profileUrl),
+    () => fetchLinkedInProfileUncached(profileUrl),
+    CACHE_TTL.PROXYCURL
+  );
+}
+
+async function fetchLinkedInProfileUncached(
+  profileUrl: string
+): Promise<CandidateProfile | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROXYCURL_TIMEOUT_MS);
   try {
+    const params: Record<string, string> = { url: profileUrl };
+    // Skills add-on is billed extra. Opt-in only.
+    if (process.env.PROXYCURL_INCLUDE_SKILLS === "1") {
+      params.skills = "include";
+    }
+
     const response = await axios.get<ProxycurlProfile>(PROXYCURL_API, {
       headers: {
         Authorization: `Bearer ${process.env.PROXYCURL_API_KEY}`,
       },
-      params: {
-        url: profileUrl,
-        skills: "include",
-      },
+      params,
+      signal: controller.signal,
+      timeout: PROXYCURL_TIMEOUT_MS,
     });
 
     const data = response.data;
 
-    // Format experience entries
     const experience = (data.experiences || []).map((exp) => {
       const startYear = exp.starts_at?.year || "N/A";
       const endYear = exp.ends_at?.year || "Present";
       return `${exp.title} at ${exp.company} (${startYear} - ${endYear})`;
     });
 
-    // Extract skills from profile
     const skills = data.skills || [];
 
-    // Add skills from experience descriptions if available
+    // Local keyword extraction so we still surface tech skills when the paid
+    // `skills=include` flag is off.
     const experienceSkills = (data.experiences || [])
       .filter((exp) => exp.description)
       .flatMap((exp) => {
-        // Simple keyword extraction from descriptions
         const techKeywords = [
-          "JavaScript",
-          "TypeScript",
-          "Python",
-          "Java",
-          "React",
-          "Node.js",
-          "AWS",
-          "Docker",
-          "Kubernetes",
-          "SQL",
-          "MongoDB",
-          "GraphQL",
-          "REST",
-          "API",
-          "Agile",
-          "Scrum",
-          "Go",
-          "Rust",
-          "C++",
-          "C#",
-          ".NET",
-          "Azure",
-          "GCP",
-          "Redis",
-          "PostgreSQL",
-          "MySQL",
-          "Next.js",
-          "Vue.js",
-          "Angular",
-          "TensorFlow",
-          "PyTorch",
-          "Machine Learning",
-          "CI/CD",
-          "Terraform",
+          "JavaScript", "TypeScript", "Python", "Java", "React", "Node.js",
+          "AWS", "Docker", "Kubernetes", "SQL", "MongoDB", "GraphQL", "REST",
+          "API", "Agile", "Scrum", "Go", "Rust", "C++", "C#", ".NET", "Azure",
+          "GCP", "Redis", "PostgreSQL", "MySQL", "Next.js", "Vue.js", "Angular",
+          "TensorFlow", "PyTorch", "Machine Learning", "CI/CD", "Terraform",
         ];
         return techKeywords.filter((keyword) =>
           exp.description?.toLowerCase().includes(keyword.toLowerCase())
@@ -132,20 +128,22 @@ export async function fetchLinkedInProfile(
     };
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      if (error.response?.status === 401) {
-        throw new Error("Invalid Proxycurl API key");
-      } else if (error.response?.status === 404) {
-        throw new Error("LinkedIn profile not found");
-      } else if (error.response?.status === 429) {
-        throw new Error(
-          "Proxycurl rate limit exceeded. Please try again later."
-        );
+      if (error.response?.status === 404) {
+        // 404 is durable — cache the negative result.
+        return null;
       }
-      throw new Error(
-        `LinkedIn API error: ${error.response?.data?.message || error.message}`
+      // Auth / rate-limit / network: log and return null so scoring continues.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[lib/ai/linkedin] Proxycurl fetch failed (${error.response?.status ?? "network"}): ${error.message}`
       );
+      return null;
     }
-    throw new Error(`Failed to fetch LinkedIn profile: ${error}`);
+    // eslint-disable-next-line no-console
+    console.warn("[lib/ai/linkedin] Proxycurl fetch failed:", error);
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -153,7 +151,6 @@ export async function fetchLinkedInProfile(
  * Extracts and normalizes LinkedIn URL from various formats
  */
 export function extractLinkedInUrl(input: string): string | null {
-  // Handle various LinkedIn URL formats
   const patterns = [
     /linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
     /linkedin\.com\/pub\/([a-zA-Z0-9\-]+)/i,
@@ -161,14 +158,12 @@ export function extractLinkedInUrl(input: string): string | null {
 
   for (const pattern of patterns) {
     if (pattern.test(input)) {
-      // Normalize the URL
       if (!input.startsWith("http")) {
         return `https://www.${input}`;
       }
       return input;
     }
   }
-
   return null;
 }
 

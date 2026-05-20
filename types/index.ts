@@ -779,13 +779,17 @@ export interface ParsedResume {
  * Zod schema for ParsedResume (OpenAI structured output)
  * @see ParsedResume
  */
+// NOTE: OpenAI's structured outputs require `nullable()` on every non-required
+// field. Using `.optional()` alone emits a runtime warning ("Field is not
+// strictly required, did you mean .nullable()?"). We chain both so the schema
+// is permissive in TS and well-formed for OpenAI.
 export const ParsedResumeSchema = z.object({
   name: z.string(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  location: z.string().optional(),
-  linkedin_url: z.string().url().optional(),
-  github_url: z.string().url().optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
+  linkedin_url: z.string().url().nullable().optional(),
+  github_url: z.string().url().nullable().optional(),
   summary: z.string(),
   skills: z.array(z.string()),
   experience: z.array(
@@ -793,7 +797,7 @@ export const ParsedResumeSchema = z.object({
       title: z.string(),
       company: z.string(),
       start_date: z.string(),
-      end_date: z.string().optional(),
+      end_date: z.string().nullable().optional(),
       description: z.string(),
       highlights: z.array(z.string()),
     })
@@ -801,12 +805,12 @@ export const ParsedResumeSchema = z.object({
   education: z.array(
     z.object({
       degree: z.string(),
-      field: z.string().optional(),
+      field: z.string().nullable().optional(),
       institution: z.string(),
-      graduation_year: z.number().optional(),
+      graduation_year: z.number().nullable().optional(),
     })
   ),
-  certifications: z.array(z.string()).optional(),
+  certifications: z.array(z.string()).nullable().optional(),
   years_of_experience: z.number(),
   education_level: z.enum(["high_school", "associate", "bachelor", "master", "phd", "other"]),
 });

@@ -77,19 +77,12 @@ const PUBLIC_PAGE_PREFIXES = [
  * `/jobs/new` and `/jobs/[id]/edit` override the `/jobs` public prefix.
  */
 const RECRUITER_PAGE_PREFIXES = [
-  "/dashboard",
-  "/candidates",
-  "/interviews", // distinct from singular /interview/[token]
+  "/dashboard", // covers /dashboard, /dashboard/jobs, /dashboard/interviews, /dashboard/profile, /dashboard/interview, /dashboard/candidates, /dashboard/settings
   "/settings",
-  "/profile",
 ] as const;
 
-/** Exact paths only the recruiter can hit (no descendants, except /edit). */
-const RECRUITER_PAGE_EXACT_OR_NESTED: Array<(p: string) => boolean> = [
-  (p) => p === "/jobs/new",
-  // /jobs/[id]/edit or any nested /edit segment under /jobs
-  (p) => /^\/jobs\/[^/]+\/edit(\/.*)?$/.test(p),
-];
+/** Exact paths only the recruiter can hit (no descendants). */
+const RECRUITER_PAGE_EXACT_OR_NESTED: Array<(p: string) => boolean> = [];
 
 /** Auth pages — when authed, redirect away from these. */
 const AUTH_REDIRECT_PAGES = [

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema for updates
 const updateCandidateSchema = z.object({
@@ -19,14 +19,13 @@ interface RouteParams {
 
 /**
  * GET /api/candidates/[id]
- * Get a single candidate with full details (MVP: no auth required)
+ * Get a single candidate with full details. Requires recruiter session.
+ * Ownership is enforced via RLS on the joined `jobs` row.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
-    // MVP: Auth disabled
+    const { supabase } = await requireRecruiter();
 
     // Fetch candidate with job details
     const { data: candidate, error: candidateError } = await supabase
@@ -45,7 +44,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // MVP: Skip job ownership check
+    // Ownership: RLS on the !inner join to `jobs` already rejected non-owned
+    // candidates above. No additional check needed.
 
     // Fetch activities
     const { data: activities } = await supabase
@@ -81,6 +81,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       interview: interview || null,
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/candidates/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -91,14 +93,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH /api/candidates/[id]
- * Update a candidate (MVP: no auth required)
+ * Update a candidate. Requires recruiter session.
  */
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-
-    // MVP: Auth disabled
+    const { supabase } = await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // MVP: Skip job ownership check - verify candidate exists
+    // RLS scopes this SELECT to candidates of jobs owned by the recruiter.
     const { data: candidate } = await supabase
       .from("candidates")
       .select("id")
@@ -146,6 +146,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated);
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in PATCH /api/candidates/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },
@@ -156,16 +158,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
 /**
  * DELETE /api/candidates/[id]
- * Delete a candidate (MVP: no auth required)
+ * Delete a candidate. Requires recruiter session.
  */
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
-    // MVP: Auth disabled - delete directly
-
-    // Delete candidate
+    // Delete candidate (RLS enforces ownership via parent job).
     const { error: deleteError } = await supabase
       .from("candidates")
       .delete()
@@ -181,6 +181,8 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in DELETE /api/candidates/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

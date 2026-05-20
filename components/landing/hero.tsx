@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Github } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Tooltip,
@@ -79,23 +79,22 @@ export function Hero() {
         
         {/* CTAs with animation and improved hierarchy */}
         <div className={`mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 ${mounted ? 'animate-fade-in-up stagger-4' : 'opacity-0'}`}>
-          <Link href="/dashboard">
-            <Button 
-              size="lg" 
+          <Link href="/jobs">
+            <Button
+              size="lg"
               className="bg-accent text-accent-foreground hover:bg-accent/90 px-8 h-12 text-base font-semibold shadow-lg shadow-accent/20 btn-lift"
             >
-              Get a demo
+              See open roles
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
-          <Link href="https://github.com/zordhalo/lontario-YC" target="_blank" rel="noopener noreferrer">
-            <Button 
-              variant="outline" 
-              size="lg" 
+          <Link href="#waitlist">
+            <Button
+              variant="outline"
+              size="lg"
               className="px-8 h-12 text-base border-border hover:border-accent/50 hover:bg-accent/5 transition-all bg-transparent"
             >
-              <Github className="mr-2 h-4 w-4" />
-              View source code
+              Get notified
             </Button>
           </Link>
         </div>

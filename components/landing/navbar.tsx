@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -20,7 +20,6 @@ export function Navbar() {
   const [activeSection, setActiveSection] = useState("");
   const [logoClicks, setLogoClicks] = useState(0);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { toast } = useToast();
 
   // Track scroll position and update active section
   useEffect(() => {
@@ -69,8 +68,7 @@ export function Navbar() {
     
     // Trigger easter egg at 5 clicks
     if (logoClicks + 1 >= 5) {
-      toast({
-        title: "Achievement unlocked: Logo Clicker",
+      toast("Achievement unlocked: Logo Clicker", {
         description: "This changes nothing. But we appreciate the enthusiasm.",
       });
       setLogoClicks(0);
@@ -128,14 +126,14 @@ export function Navbar() {
             </div>
           </div>
           <div className="hidden md:flex items-center gap-4">
-            <Link href="/dashboard">
+            <Link href="/login">
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 Sign in
               </Button>
             </Link>
-            <Link href="/dashboard">
+            <Link href="/jobs">
               <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-sm">
-                Get a demo
+                Browse jobs
               </Button>
             </Link>
           </div>
@@ -170,14 +168,14 @@ export function Navbar() {
               );
             })}
             <div className="pt-4 flex flex-col gap-3 border-t border-border mt-4">
-              <Link href="/dashboard">
+              <Link href="/login">
                 <Button variant="ghost" size="sm" className="w-full justify-center">
                   Sign in
                 </Button>
               </Link>
-              <Link href="/dashboard">
+              <Link href="/jobs">
                 <Button size="sm" className="w-full bg-accent text-accent-foreground">
-                  Get a demo
+                  Browse jobs
                 </Button>
               </Link>
             </div>

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Github, Linkedin, Mail, ArrowRight } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Github, Mail, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface FooterLink {
@@ -58,41 +58,40 @@ const footerLinks: Record<string, FooterLink[]> = {
     { label: "Source Code", href: "https://github.com/zordhalo/lontario-YC", isReal: true },
   ],
   legal: [
-    { 
-      label: "Privacy (we don't collect data)", 
-      href: "#", 
-      toastTitle: "Privacy Policy",
-      toastDescription: "We don't track you. We can barely track our own code changes."
+    {
+      label: "Privacy (we barely collect data)",
+      href: "/privacy",
+      isReal: true,
     },
-    { 
-      label: "Terms (use at your own risk)", 
-      href: "#", 
-      toastTitle: "Terms of Service",
-      toastDescription: "Terms: Have fun. Service: No guarantees. Risk: Might make you want to hire me."
+    {
+      label: "Terms (use at your own risk)",
+      href: "/terms",
+      isReal: true,
     },
-    { 
-      label: "Disclaimer (it's a demo)", 
-      href: "#", 
+    {
+      label: "Disclaimer (it's a demo)",
+      href: "#",
       toastTitle: "Disclaimer",
       toastDescription: "This is a portfolio demo. Don't actually use it for hiring. Unless you're hiring me."
+    },
+    {
+      label: "Contact",
+      href: "mailto:brian@creatin.ca",
+      isReal: true,
     },
   ],
 };
 
 const socialLinks = [
   { icon: Github, href: "https://github.com/zordhalo/lontario-YC", label: "GitHub" },
-  { icon: Linkedin, href: "#", label: "LinkedIn" },
-  { icon: Mail, href: "mailto:hello@lontario.dev", label: "Email" },
+  { icon: Mail, href: "mailto:brian@creatin.ca", label: "Email" },
 ];
 
 export function Footer() {
-  const { toast } = useToast();
-
   const handleLinkClick = (e: React.MouseEvent, link: FooterLink) => {
     if (!link.isReal && link.toastTitle) {
       e.preventDefault();
-      toast({
-        title: link.toastTitle,
+      toast(link.toastTitle, {
         description: link.toastDescription,
       });
     }
@@ -225,12 +224,30 @@ export function Footer() {
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.label}>
-                  <button
-                    onClick={(e) => handleLinkClick(e as unknown as React.MouseEvent, link)}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors text-left"
-                  >
-                    {link.label}
-                  </button>
+                  {link.isReal ? (
+                    link.href.startsWith("mailto:") ? (
+                      <a
+                        href={link.href}
+                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {link.label}
+                      </Link>
+                    )
+                  ) : (
+                    <button
+                      onClick={(e) => handleLinkClick(e as unknown as React.MouseEvent, link)}
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors text-left"
+                    >
+                      {link.label}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -241,8 +258,8 @@ export function Footer() {
         <div className="mt-12 pt-8 border-t border-border">
           <div className="flex flex-col items-center text-center mb-8">
             <p className="text-muted-foreground mb-2">Like what you see?</p>
-            <a 
-              href="mailto:hello@lontario.dev"
+            <a
+              href="mailto:brian@creatin.ca"
               className={cn(
                 "inline-flex items-center gap-2 text-accent hover:text-accent/80 font-semibold text-lg transition-colors",
                 "group"

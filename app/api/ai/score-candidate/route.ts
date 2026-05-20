@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { scoreCandidate } from "@/lib/ai";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const scoreCandidateSchema = z.object({
@@ -22,11 +23,16 @@ const scoreCandidateSchema = z.object({
 
 /**
  * POST /api/ai/score-candidate
- * Calculate AI match score between a candidate and job (MVP: no auth required)
+ * Calculate AI match score between a candidate and job.
+ * Requires recruiter session.
+ *
+ * NOTE for w3-ai-cost-controls: public application scoring happens via
+ * `lib/ai/scoring.ts:processAndScoreCandidate` invoked directly from
+ * `/api/public/apply`. That call path does NOT hit this endpoint.
  */
 export async function POST(req: NextRequest) {
   try {
-    // MVP: Auth disabled
+    await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -49,6 +55,8 @@ export async function POST(req: NextRequest) {
       scored_at: new Date().toISOString(),
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Error scoring candidate:", error);
 
     if (error instanceof Error) {

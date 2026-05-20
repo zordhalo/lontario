@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 interface DashboardAlert {
   id: string;
@@ -11,11 +11,11 @@ interface DashboardAlert {
 
 /**
  * GET /api/dashboard/alerts
- * Get actionable alerts for the dashboard (MVP: no auth required)
+ * Get actionable alerts for the dashboard. Requires recruiter session.
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
     const alerts: DashboardAlert[] = [];
 
     // 1. High-scoring candidates (ai_score >= 90) in 'applied' stage per job
@@ -112,6 +112,8 @@ export async function GET() {
 
     return NextResponse.json({ alerts });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/dashboard/alerts:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

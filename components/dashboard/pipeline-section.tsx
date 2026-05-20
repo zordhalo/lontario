@@ -82,7 +82,7 @@ export function PipelineSection() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-lg">Active Jobs Pipeline</CardTitle>
-          <Link href="/jobs">
+          <Link href="/dashboard/jobs">
             <Button variant="ghost" size="sm" className="text-primary">
               View all
               <ArrowRight className="ml-1 h-4 w-4" />
@@ -130,7 +130,7 @@ export function PipelineSection() {
             </EmptyHeader>
             <EmptyContent>
               <Button asChild size="sm">
-                <Link href="/jobs/new">Create Job</Link>
+                <Link href="/dashboard/jobs/new">Create Job</Link>
               </Button>
             </EmptyContent>
           </Empty>
@@ -143,7 +143,7 @@ export function PipelineSection() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-lg">Active Jobs Pipeline</CardTitle>
-        <Link href="/jobs">
+        <Link href="/dashboard/jobs">
           <Button variant="ghost" size="sm" className="text-primary">
             View all
             <ArrowRight className="ml-1 h-4 w-4" />
@@ -159,7 +159,7 @@ export function PipelineSection() {
           return (
             <Link
               key={job.id}
-              href={`/jobs/${job.id}`}
+              href={`/dashboard/jobs/${job.id}`}
               className="block group"
             >
               <div className="p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/30 transition-all">

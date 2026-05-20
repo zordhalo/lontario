@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { generateInterviewQuestions } from "@/lib/ai/openai";
 import { getAppUrl } from "@/lib/utils";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 import {
   ScheduleInterviewRequestSchema,
   ScheduleInterviewResponse,
@@ -13,10 +13,11 @@ import {
 
 /**
  * POST /api/interviews/schedule
- * Schedule an AI interview for a candidate
+ * Schedule an AI interview for a candidate. Requires recruiter session.
  */
 export async function POST(request: NextRequest) {
   try {
+    const { supabase: authedSupabase } = await requireRecruiter();
     const body = await request.json();
 
     // Validate request body
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const supabase = authedSupabase;
 
     // Fetch candidate with job details
     const { data: candidate, error: candidateError } = await supabase
@@ -321,6 +322,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Schedule interview error:", error);
     return NextResponse.json(
       {
@@ -334,11 +337,11 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/interviews/schedule
- * List upcoming scheduled interviews
+ * List upcoming scheduled interviews. Requires recruiter session.
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
     const { searchParams } = new URL(request.url);
 
     const jobId = searchParams.get("job_id");
@@ -417,6 +420,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("List interviews error:", error);
     return NextResponse.json(
       {

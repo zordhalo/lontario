@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { parseResume } from "@/lib/ai";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 // Validation schema
 const parseResumeSchema = z.object({
@@ -15,11 +16,15 @@ const parseResumeSchema = z.object({
 
 /**
  * POST /api/ai/parse-resume
- * Extract structured data from resume text using AI (MVP: no auth required)
+ * Extract structured data from resume text using AI. Requires recruiter session.
+ *
+ * NOTE for w3-ai-cost-controls: public applicant resume parsing happens in
+ * `/api/public/apply` (rate-limited and validated) — that flow does NOT
+ * call this endpoint.
  */
 export async function POST(req: NextRequest) {
   try {
-    // MVP: Auth disabled
+    await requireRecruiter();
 
     // Parse and validate request body
     const body = await req.json();
@@ -42,6 +47,8 @@ export async function POST(req: NextRequest) {
       parsed_at: new Date().toISOString(),
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Error parsing resume:", error);
 
     if (error instanceof Error) {

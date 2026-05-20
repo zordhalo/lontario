@@ -116,7 +116,7 @@ export function UpcomingInterviewsSection({
           <CardDescription>Scheduled interviews for the next 7 days</CardDescription>
         </div>
         <Button variant="ghost" size="sm" asChild>
-          <a href="/interviews">View all</a>
+          <a href="/dashboard/interviews">View all</a>
         </Button>
       </CardHeader>
       <CardContent>
@@ -143,7 +143,7 @@ export function UpcomingInterviewsSection({
             </EmptyHeader>
             <EmptyContent>
               <Button asChild size="sm">
-                <a href="/jobs">View Candidates</a>
+                <a href="/dashboard/jobs">View Candidates</a>
               </Button>
             </EmptyContent>
           </Empty>
@@ -209,7 +209,7 @@ export function UpcomingInterviewsSection({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem asChild>
-                        <a href={`/jobs/${interview.job_id}`}>
+                        <a href={`/dashboard/jobs/${interview.job_id}`}>
                           View Candidate
                         </a>
                       </DropdownMenuItem>

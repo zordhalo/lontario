@@ -120,7 +120,7 @@ export function ActivityFeed() {
             </EmptyHeader>
             <EmptyContent>
               <Button asChild size="sm">
-                <a href="/jobs/new">Create Job</a>
+                <a href="/dashboard/jobs/new">Create Job</a>
               </Button>
             </EmptyContent>
           </Empty>

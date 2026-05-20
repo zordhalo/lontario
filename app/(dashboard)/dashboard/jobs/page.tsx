@@ -56,7 +56,7 @@ export default function JobsPage() {
             Manage your job postings and view candidates
           </p>
         </div>
-        <Link href="/jobs/new">
+        <Link href="/dashboard/jobs/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" />
             Create Job
@@ -140,7 +140,7 @@ export default function JobsPage() {
               <p className="text-muted-foreground mb-4">
                 Try adjusting your filters or search query
               </p>
-              <Link href="/jobs/new">
+              <Link href="/dashboard/jobs/new">
                 <Button>Create your first job</Button>
               </Link>
             </div>

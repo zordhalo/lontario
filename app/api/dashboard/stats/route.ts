@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 interface StatWithTrend {
   value: number;
@@ -15,11 +15,12 @@ interface DashboardStats {
 
 /**
  * GET /api/dashboard/stats
- * Get aggregated dashboard statistics (MVP: no auth required)
+ * Get aggregated dashboard statistics. Requires recruiter session.
+ * RLS scopes all counts to recruiter-owned rows.
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     // Get current date boundaries
     const now = new Date();
@@ -134,6 +135,8 @@ export async function GET() {
 
     return NextResponse.json(stats);
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Unexpected error in GET /api/dashboard/stats:", error);
     return NextResponse.json(
       { error: "Internal server error", code: "INTERNAL_ERROR" },

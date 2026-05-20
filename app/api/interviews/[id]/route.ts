@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { RescheduleInterviewRequestSchema } from "@/types";
+import { authErrorResponse, requireRecruiter } from "@/lib/supabase/auth-helpers";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -8,12 +8,12 @@ interface RouteParams {
 
 /**
  * GET /api/interviews/[id]
- * Fetch interview details by ID
+ * Fetch interview details by ID. Requires recruiter session.
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     const { data: interview, error } = await supabase
       .from("ai_interviews")
@@ -67,6 +67,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ interview });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Get interview error:", error);
     return NextResponse.json(
       {
@@ -80,13 +82,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH /api/interviews/[id]
- * Update interview (reschedule, update status, etc.)
+ * Update interview (reschedule, update status, etc.). Requires recruiter session.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
 
     // Fetch current interview
     const { data: currentInterview, error: fetchError } = await supabase
@@ -234,6 +236,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ interview: updatedInterview });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Update interview error:", error);
     return NextResponse.json(
       {
@@ -247,12 +251,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 /**
  * DELETE /api/interviews/[id]
- * Cancel a scheduled interview
+ * Cancel a scheduled interview. Requires recruiter session.
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const { supabase } = await requireRecruiter();
     const { searchParams } = new URL(request.url);
     const sendNotification = searchParams.get("send_notification") !== "false";
     const cancellationReason =
@@ -332,6 +336,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       message: "Interview cancelled successfully",
     });
   } catch (error) {
+    const authResp = authErrorResponse(error);
+    if (authResp) return authResp;
     console.error("Cancel interview error:", error);
     return NextResponse.json(
       {
