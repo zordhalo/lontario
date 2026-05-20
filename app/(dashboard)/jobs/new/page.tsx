@@ -407,7 +407,10 @@ We're building something special, and we'd love for you to be a part of it. Appl
                     <Select
                       value={formData.type}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, type: value })
+                        setFormData({
+                          ...formData,
+                          type: value as typeof formData.type,
+                        })
                       }
                     >
                       <SelectTrigger id="type">

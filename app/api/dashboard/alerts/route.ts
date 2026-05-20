@@ -38,7 +38,13 @@ export async function GET() {
       const jobCounts: Record<string, { title: string; count: number }> = {};
       
       highScoreCandidates.forEach((candidate) => {
-        const job = candidate.job as { id: string; title: string } | null;
+        // Supabase types joined rows as arrays even with !inner — normalize to first row.
+        const jobField = candidate.job as
+          | { id: string; title: string }
+          | { id: string; title: string }[]
+          | null
+          | undefined;
+        const job = Array.isArray(jobField) ? jobField[0] ?? null : jobField ?? null;
         if (job) {
           if (!jobCounts[job.id]) {
             jobCounts[job.id] = { title: job.title, count: 0 };

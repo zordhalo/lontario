@@ -5,26 +5,30 @@
 
 import * as Sentry from "@sentry/nextjs";
 
-Sentry.init({
-  dsn: "https://5bff9440a5dd36735f2c9ec10476c7a2@o4510828351324160.ingest.us.sentry.io/4510828353486848",
-  environment: process.env.NODE_ENV,
+const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-  // Define how likely traces are sampled.
-  // 10% in production, 100% in development
-  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+if (dsn) {
+  Sentry.init({
+    dsn,
+    environment: process.env.NODE_ENV,
 
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+    // Define how likely traces are sampled.
+    // 10% in production, 100% in development
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
 
-  // Privacy: DO NOT send user PII
-  sendDefaultPii: false,
+    // Enable logs to be sent to Sentry
+    enableLogs: true,
 
-  // Scrub sensitive data before sending to Sentry
-  beforeSend(event) {
-    if (event.user) {
-      delete event.user.email;
-      delete event.user.ip_address;
-    }
-    return event;
-  },
-});
+    // Privacy: DO NOT send user PII
+    sendDefaultPii: false,
+
+    // Scrub sensitive data before sending to Sentry
+    beforeSend(event) {
+      if (event.user) {
+        delete event.user.email;
+        delete event.user.ip_address;
+      }
+      return event;
+    },
+  });
+}

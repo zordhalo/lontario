@@ -70,8 +70,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Transform activities into a more usable format
+    // Note: Supabase types joined rows as arrays even with !inner, so normalize to the first row.
     const formattedActivities = (activities || []).map((activity) => {
-      const candidate = activity.candidate as { id: string; full_name: string; email: string; job_id: string } | null;
+      const candidateField = activity.candidate as
+        | { id: string; full_name: string; email: string; job_id: string }
+        | { id: string; full_name: string; email: string; job_id: string }[]
+        | null
+        | undefined;
+      const candidate = Array.isArray(candidateField)
+        ? candidateField[0] ?? null
+        : candidateField ?? null;
       
       // Generate a human-readable message based on activity type
       let message = "";

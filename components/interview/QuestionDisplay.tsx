@@ -65,7 +65,8 @@ export function QuestionDisplay({ questionSet }: QuestionDisplayProps) {
     "all"
   )
 
-  const groupedQuestions = questionSet.groupedByCategory || {}
+  const groupedQuestions: Partial<Record<QuestionCategory, GeneratedQuestion[]>> =
+    questionSet.groupedByCategory || {}
 
   // Count questions by difficulty
   const difficultyCount = questionSet.questions.reduce(
@@ -77,7 +78,7 @@ export function QuestionDisplay({ questionSet }: QuestionDisplayProps) {
   )
 
   // Get questions for current tab
-  const displayedQuestions =
+  const displayedQuestions: GeneratedQuestion[] =
     activeCategory === "all"
       ? questionSet.questions
       : groupedQuestions[activeCategory] || []

@@ -467,7 +467,7 @@ export default function CandidateInterviewClient({ token }: CandidateInterviewCl
             )}
 
             <Button
-              onClick={startInterview}
+              onClick={() => startInterview()}
               disabled={isSubmitting}
               className="w-full"
               size="lg"

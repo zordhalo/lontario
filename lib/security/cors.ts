@@ -3,10 +3,17 @@
  *
  * Origin validation and CORS header generation for API routes.
  *
+ * Allow-list (Wave 2 hardened — no *.vercel.app wildcard):
+ *   1. NEXT_PUBLIC_APP_URL (canonical production origin)
+ *   2. https://${VERCEL_URL} — only on preview deployments (the deploy's own URL)
+ *   3. http://localhost:3000 — only when NODE_ENV=development
+ *
  * @module lib/security/cors
  */
 
 import { NextRequest, NextResponse } from "next/server";
+
+let _warnedMissingAppUrl = false;
 
 /**
  * Build the list of allowed origins from environment variables.
@@ -17,18 +24,25 @@ function getAllowedOrigins(): string[] {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
     origins.push(appUrl.replace(/\/$/, ""));
+  } else if (!_warnedMissingAppUrl) {
+    _warnedMissingAppUrl = true;
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[cors] NEXT_PUBLIC_APP_URL is unset — all cross-origin requests will be denied."
+    );
   }
 
-  // Vercel preview deployments
+  // On Vercel preview deployments, allow the deploy's own URL so the preview
+  // can call its own APIs. VERCEL_ENV === "preview" gates this to non-prod.
+  const vercelEnv = process.env.VERCEL_ENV;
   const vercelUrl = process.env.VERCEL_URL;
-  if (vercelUrl) {
+  if (vercelEnv === "preview" && vercelUrl) {
     origins.push(`https://${vercelUrl}`);
   }
 
-  // Vercel branch preview URLs
-  const vercelBranchUrl = process.env.VERCEL_BRANCH_URL;
-  if (vercelBranchUrl) {
-    origins.push(`https://${vercelBranchUrl}`);
+  // Local development
+  if (process.env.NODE_ENV === "development") {
+    origins.push("http://localhost:3000");
   }
 
   return origins;
@@ -36,19 +50,14 @@ function getAllowedOrigins(): string[] {
 
 /**
  * Check whether an origin is allowed.
+ *
+ * Exact match only. The previous `*.vercel.app` wildcard was removed because
+ * any attacker could deploy to vercel.app and issue credentialed cross-origin
+ * requests against production.
  */
 export function isOriginAllowed(origin: string | null): boolean {
   if (!origin) return false;
-
-  const allowed = getAllowedOrigins();
-
-  // Exact match
-  if (allowed.includes(origin)) return true;
-
-  // Allow any *.vercel.app preview
-  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) return true;
-
-  return false;
+  return getAllowedOrigins().includes(origin);
 }
 
 /**
@@ -67,6 +76,7 @@ export function getCorsHeaders(
       "Content-Type, Authorization, X-Requested-With",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
   };
 }
 

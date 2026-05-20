@@ -49,9 +49,10 @@ interface JobCardProps {
   variant?: "grid" | "list"
 }
 
-const statusColors = {
+const statusColors: Record<"active" | "draft" | "paused" | "closed", string> = {
   active: "bg-success/10 text-success border-success/30",
   draft: "bg-warning/10 text-warning border-warning/30",
+  paused: "bg-muted text-muted-foreground border-border",
   closed: "bg-muted text-muted-foreground border-border",
 }
 

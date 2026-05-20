@@ -1,11 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
+import { env, isProd } from "@/lib/env";
 import {
   sendInterviewReminderEmail,
-  sendBatchEmails,
   type EmailType,
 } from "@/lib/email";
 import type { EmailTemplateData } from "@/lib/email/templates";
+
+/**
+ * Verify the incoming request is from Vercel Cron.
+ * - In production, CRON_SECRET MUST be set; otherwise return 503 (fail closed).
+ * - Compare with constant-time equality.
+ * - Also accept x-vercel-cron header as a defence-in-depth signal.
+ */
+function verifyCron(request: NextRequest): NextResponse | null {
+  const cronSecret = env.CRON_SECRET;
+
+  if (!cronSecret) {
+    if (isProd) {
+      return NextResponse.json(
+        { error: "Cron not configured: CRON_SECRET unset" },
+        { status: 503 }
+      );
+    }
+    // In dev, allow without secret
+    return null;
+  }
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  const expected = `Bearer ${cronSecret}`;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  const ok = a.length === b.length && timingSafeEqual(a, b);
+
+  // Defence-in-depth: Vercel Cron sets x-vercel-cron header.
+  const isVercelCron = request.headers.get("x-vercel-cron") !== null;
+
+  if (!ok && !isVercelCron) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
 
 /**
  * GET /api/cron/interview-reminders
@@ -18,14 +54,8 @@ import type { EmailTemplateData } from "@/lib/email/templates";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret to prevent unauthorized access
-    const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    // In production, verify the cron secret
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const denied = verifyCron(request);
+    if (denied) return denied;
 
     const supabase = createAdminClient();
     const now = new Date();

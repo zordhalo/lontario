@@ -15,7 +15,9 @@ import {
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
   vi.stubEnv("VERCEL_URL", "");
+  vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("VERCEL_BRANCH_URL", "");
+  vi.stubEnv("NODE_ENV", "test");
 });
 
 // ============================================================
@@ -35,17 +37,24 @@ describe("isOriginAllowed", () => {
     expect(isOriginAllowed("https://evil.com")).toBe(false);
   });
 
-  it("allows Vercel preview URLs (*.vercel.app)", () => {
-    expect(isOriginAllowed("https://my-app-abc123.vercel.app")).toBe(true);
+  it("rejects arbitrary *.vercel.app origins (wildcard removed in Wave 2)", () => {
+    expect(isOriginAllowed("https://my-app-abc123.vercel.app")).toBe(false);
   });
 
   it("rejects malformed Vercel URLs", () => {
     expect(isOriginAllowed("https://my-app.vercel.app.evil.com")).toBe(false);
   });
 
-  it("allows VERCEL_URL when set", () => {
+  it("allows VERCEL_URL on preview deployments", () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("VERCEL_URL", "my-deploy.vercel.app");
     expect(isOriginAllowed("https://my-deploy.vercel.app")).toBe(true);
+  });
+
+  it("ignores VERCEL_URL when not on a preview deployment", () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("VERCEL_URL", "my-deploy.vercel.app");
+    expect(isOriginAllowed("https://my-deploy.vercel.app")).toBe(false);
   });
 
   it("strips trailing slash from app URL", () => {

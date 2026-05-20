@@ -10,6 +10,7 @@
  */
 
 import { createBrowserClient } from "@supabase/ssr";
+import { env } from "@/lib/env";
 
 /**
  * Creates a Supabase client for browser/client-side usage
@@ -28,8 +29,8 @@ import { createBrowserClient } from "@supabase/ssr";
  * const { data } = await supabase.from("jobs").select("*");
  */
 export function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabasePublishableKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabasePublishableKey) {
     throw new Error(

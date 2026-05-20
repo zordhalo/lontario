@@ -147,7 +147,7 @@ export function CandidatePanel({
     
     // Merge fresh data from API with prop data
     // API data takes precedence when available
-    const details = candidateDetails as Record<string, unknown>;
+    const details = candidateDetails as unknown as Record<string, unknown>;
     return {
       ...candidate,
       // Avatar - prefer fresh API data
@@ -674,7 +674,11 @@ export function CandidatePanel({
           candidateEmail={displayCandidate.email || ""}
           jobId={jobId}
           jobTitle={jobTitle}
-          questionGenerationStatus={displayCandidate.questionGenerationStatus || displayCandidate.question_generation_status || "none"}
+          questionGenerationStatus={
+            (displayCandidate.questionGenerationStatus ||
+              displayCandidate.question_generation_status ||
+              "none") as "none" | "pending" | "generating" | "ready" | "failed"
+          }
           onScheduled={handleInterviewScheduled}
         />
       )}

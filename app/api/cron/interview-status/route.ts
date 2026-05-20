@@ -1,5 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
+import { env, isProd } from "@/lib/env";
+
+function verifyCron(request: NextRequest): NextResponse | null {
+  const cronSecret = env.CRON_SECRET;
+  if (!cronSecret) {
+    if (isProd) {
+      return NextResponse.json(
+        { error: "Cron not configured: CRON_SECRET unset" },
+        { status: 503 }
+      );
+    }
+    return null;
+  }
+  const authHeader = request.headers.get("authorization") ?? "";
+  const expected = `Bearer ${cronSecret}`;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  const ok = a.length === b.length && timingSafeEqual(a, b);
+  const isVercelCron = request.headers.get("x-vercel-cron") !== null;
+  if (!ok && !isVercelCron) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
 
 /**
  * GET /api/cron/interview-status
@@ -14,13 +39,8 @@ import { createAdminClient } from "@/lib/supabase/server";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const denied = verifyCron(request);
+    if (denied) return denied;
 
     const supabase = createAdminClient();
     const now = new Date();

@@ -9,6 +9,7 @@
 
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { env, isProd, warnDisabledInProd } from "@/lib/env";
 
 // ============================================================
 // Types & Configuration
@@ -199,22 +200,44 @@ let _limiter: RateLimiter | null = null;
  * Uses Upstash Redis if UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
  * are set, otherwise falls back to in-memory.
  */
+/**
+ * Deny-all rate limiter used in production when Upstash is unconfigured.
+ * Fail-closed: rejects every request rather than silently dropping back to
+ * an in-memory store that cannot work on serverless.
+ */
+function createDenyAllLimiter(): RateLimiter {
+  return {
+    async check(_identifier, tier) {
+      const config = RATE_LIMIT_CONFIG[tier];
+      return {
+        allowed: false,
+        limit: config.limit,
+        remaining: 0,
+        reset: Date.now() + config.windowMs,
+      };
+    },
+  };
+}
+
 export function getRateLimiter(): RateLimiter {
   if (_limiter) return _limiter;
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = env.UPSTASH_REDIS_REST_URL;
+  const token = env.UPSTASH_REDIS_REST_TOKEN;
 
   if (url && token) {
     const redis = new Redis({ url, token });
     _limiter = createUpstashLimiter(redis);
+  } else if (isProd) {
+    // Fail-closed in production: log to Sentry and deny all requests
+    // rather than fall back to an in-memory store that does not work on
+    // serverless (Vercel) and would silently disable rate limiting.
+    warnDisabledInProd("rate-limit", [
+      "UPSTASH_REDIS_REST_URL",
+      "UPSTASH_REDIS_REST_TOKEN",
+    ]);
+    _limiter = createDenyAllLimiter();
   } else {
-    if (process.env.NODE_ENV === "production") {
-      console.warn(
-        "[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set. " +
-          "Using in-memory fallback — this is NOT suitable for production."
-      );
-    }
     _limiter = createInMemoryLimiter();
   }
 

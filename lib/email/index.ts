@@ -15,6 +15,7 @@
  */
 
 import { Resend } from "resend";
+import { env } from "@/lib/env";
 import {
   getInterviewScheduledTemplate,
   getInterviewReminderTemplate,
@@ -40,7 +41,7 @@ let resendClient: Resend | null = null;
  */
 function getResendClient(): Resend {
   if (!resendClient) {
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKey = env.RESEND_API_KEY;
     if (!apiKey) {
       throw new Error("RESEND_API_KEY environment variable is not set");
     }
@@ -49,8 +50,17 @@ function getResendClient(): Resend {
   return resendClient;
 }
 
+/**
+ * Returns true if email sending is configured (Resend API key present).
+ * Callers (e.g. cron jobs) should check this before attempting to send and
+ * gracefully skip otherwise.
+ */
+export function isEmailConfigured(): boolean {
+  return Boolean(env.RESEND_API_KEY);
+}
+
 /** Default sender address - should be verified domain in Resend dashboard */
-const DEFAULT_FROM = process.env.EMAIL_FROM || "Lontario <noreply@example.com>";
+const DEFAULT_FROM = env.EMAIL_FROM;
 
 // ============================================================
 // TYPE DEFINITIONS

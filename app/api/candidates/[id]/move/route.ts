@@ -81,6 +81,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // MVP: Skip job ownership check
 
+    // Supabase types joined rows as arrays even with !inner — normalize to first row.
+    const jobField = candidate.job as
+      | { id: string; title: string }
+      | { id: string; title: string }[]
+      | null
+      | undefined;
+    const candidateJob = Array.isArray(jobField) ? jobField[0] ?? null : jobField ?? null;
+
     const oldStage = candidate.stage as CandidateStage;
 
     // Update candidate stage
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         new_value: stage,
         notes,
         metadata: {
-          job_title: candidate.job.title,
+          job_title: candidateJob?.title ?? null,
           rejection_reason,
         },
       })

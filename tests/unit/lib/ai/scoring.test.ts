@@ -93,7 +93,12 @@ interface ScoringResult {
     ai_summary?: string;
     ai_strengths?: string[];
     ai_concerns?: string[];
-    ai_score_breakdown?: Record<string, number>;
+    ai_score_breakdown?: {
+        skills_match: number;
+        experience_match: number;
+        education_match: number;
+        keywords_match: number;
+    };
     extracted_skills?: string[];
     avatar_url?: string;
     years_of_experience?: number;
