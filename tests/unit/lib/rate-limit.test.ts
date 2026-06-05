@@ -10,6 +10,7 @@ import {
   getRateLimiter,
   RATE_LIMIT_CONFIG,
   _resetLimiter,
+  checkEmailRateLimit,
 } from "@/lib/rate-limit";
 
 // Ensure no Upstash env vars so we get the in-memory limiter
@@ -139,5 +140,62 @@ describe("in-memory rate limiter", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ============================================================
+// checkEmailRateLimit — in-memory fallback (dev mode)
+// ============================================================
+
+describe("checkEmailRateLimit", () => {
+  beforeEach(() => {
+    // Stay in dev mode so we get the in-memory fallback
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("NODE_ENV", "test");
+    _resetLimiter();
+  });
+
+  it("allows an email within the apply limit", async () => {
+    const result = await checkEmailRateLimit("user@example.com", "apply");
+    expect(result.allowed).toBe(true);
+    expect(result.limit).toBeGreaterThan(0);
+  });
+
+  it("allows an email within the waitlist limit", async () => {
+    const result = await checkEmailRateLimit("user@example.com", "waitlist");
+    expect(result.allowed).toBe(true);
+  });
+
+  it("blocks after the apply per-email limit is reached", async () => {
+    const email = "spammer@example.com";
+    // Exhaust the apply limit (2 per hour by default)
+    await checkEmailRateLimit(email, "apply");
+    await checkEmailRateLimit(email, "apply");
+    const blocked = await checkEmailRateLimit(email, "apply");
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.remaining).toBe(0);
+  });
+
+  it("blocks after the waitlist per-email limit is reached", async () => {
+    const email = "waitlister@example.com";
+    // Exhaust the waitlist limit (1 per hour by default)
+    await checkEmailRateLimit(email, "waitlist");
+    const blocked = await checkEmailRateLimit(email, "waitlist");
+    expect(blocked.allowed).toBe(false);
+  });
+
+  it("different emails are tracked independently", async () => {
+    await checkEmailRateLimit("a@example.com", "waitlist");
+    const blocked = await checkEmailRateLimit("a@example.com", "waitlist");
+    expect(blocked.allowed).toBe(false);
+
+    const fresh = await checkEmailRateLimit("b@example.com", "waitlist");
+    expect(fresh.allowed).toBe(true);
+  });
+
+  it("returns reset timestamp in the future", async () => {
+    const result = await checkEmailRateLimit("ts@example.com", "apply");
+    expect(result.reset).toBeGreaterThan(Date.now());
   });
 });
