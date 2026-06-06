@@ -175,33 +175,19 @@ export default async function PublicJobDetailPage({
       </section>
 
       {job.required_skills && job.required_skills.length > 0 && (
-        <section className="mt-8 space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
-            What we need
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {job.required_skills.map((skill) => (
-              <Badge key={skill} variant="default" className="font-normal">
-                {skill}
-              </Badge>
-            ))}
-          </div>
-        </section>
+        <SkillSection
+          title="What we need"
+          skills={job.required_skills}
+          variant="default"
+        />
       )}
 
       {job.nice_to_have_skills && job.nice_to_have_skills.length > 0 && (
-        <section className="mt-8 space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
-            Nice to have
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {job.nice_to_have_skills.map((skill) => (
-              <Badge key={skill} variant="outline" className="font-normal">
-                {skill}
-              </Badge>
-            ))}
-          </div>
-        </section>
+        <SkillSection
+          title="Nice to have"
+          skills={job.nice_to_have_skills}
+          variant="outline"
+        />
       )}
 
       <Card className="mt-10">
@@ -220,5 +206,43 @@ export default async function PublicJobDetailPage({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// Skills with values longer than this threshold are almost certainly paragraph
+// text stored in the wrong field — render as prose instead of a badge so they
+// don't overflow the page as a single unwrappable token.
+const SKILL_TAG_MAX_LENGTH = 60
+
+function SkillSection({
+  title,
+  skills,
+  variant,
+}: {
+  title: string
+  skills: string[]
+  variant: "default" | "outline"
+}) {
+  const tags = skills.filter((s) => s.trim().length <= SKILL_TAG_MAX_LENGTH)
+  const prose = skills.filter((s) => s.trim().length > SKILL_TAG_MAX_LENGTH)
+
+  return (
+    <section className="mt-8 space-y-3">
+      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {tags.map((skill) => (
+            <Badge key={skill} variant={variant} className="font-normal">
+              {skill}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {prose.map((text) => (
+        <p key={text} className="text-sm leading-relaxed text-foreground/90">
+          {text}
+        </p>
+      ))}
+    </section>
   )
 }
