@@ -10,33 +10,20 @@
  */
 
 import { createBrowserClient } from "@supabase/ssr";
-import { env } from "@/lib/env";
 
-/**
- * Creates a Supabase client for browser/client-side usage
- * 
- * This client:
- * - Uses the publishable/anon key (safe to expose in browser)
- * - Respects Row Level Security (RLS) policies
- * - Handles auth state in browser storage
- * 
- * @returns Supabase client configured for browser usage
- * @throws Error if environment variables are missing
- * 
- * @example
- * // In a client component
- * const supabase = createClient();
- * const { data } = await supabase.from("jobs").select("*");
- */
+// Read directly — NOT through lib/env.ts. Next.js webpack only statically
+// replaces individual process.env.NEXT_PUBLIC_* accesses in client bundles;
+// the whole process.env object is not populated, so env.ts's safeParse()
+// returns undefined for these vars on the client side.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY"
+  );
+}
+
 export function createClient() {
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabasePublishableKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabasePublishableKey) {
-    throw new Error(
-      "Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY"
-    );
-  }
-
-  return createBrowserClient(supabaseUrl, supabasePublishableKey);
+  return createBrowserClient(supabaseUrl!, supabaseAnonKey!);
 }
