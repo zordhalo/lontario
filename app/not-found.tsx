@@ -100,7 +100,7 @@ export default function NotFound() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="w-full sm:w-auto bg-transparent hover:bg-accent/5 hover:border-accent/30"
+                  className="w-full sm:w-auto bg-transparent hover:bg-accent/5 hover:border-accent/30 hover:text-accent"
                 >
                   <item.icon className="mr-2 h-4 w-4" />
                   {item.label}

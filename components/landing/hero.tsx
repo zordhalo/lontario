@@ -92,7 +92,7 @@ export function Hero() {
             <Button
               variant="outline"
               size="lg"
-              className="px-8 h-12 text-base border-border hover:border-accent/50 hover:bg-accent/5 transition-all bg-transparent"
+              className="px-8 h-12 text-base border-border hover:border-accent/50 hover:bg-accent/5 hover:text-accent transition-all bg-transparent"
             >
               Get notified
             </Button>

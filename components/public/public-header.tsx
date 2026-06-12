@@ -36,7 +36,7 @@ export function PublicHeader() {
             <Button
               size="sm"
               variant="outline"
-              className="rounded-full border-accent/40 text-foreground hover:border-accent hover:bg-accent/10"
+              className="rounded-full border-accent/40 text-foreground hover:border-accent hover:bg-accent/10 hover:text-accent"
             >
               Join the waitlist
             </Button>
