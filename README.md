@@ -1,5 +1,7 @@
 # Lontario - AI Hiring Platform
 
+[![MCP servers live](https://whobuildsagents.com/badge/advancelabs.dev.svg)](https://whobuildsagents.com/advancelabs.dev)
+
 Lontario is an AI-powered hiring platform that revolutionizes recruitment through intelligent automation. The platform enables recruiters to post jobs, receive AI-analyzed candidate applications, conduct automated text-based interviews, and make data-driven hiring decisions in minutes instead of hours.
 
 ## Features
